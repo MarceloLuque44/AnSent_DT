@@ -1,0 +1,223 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171e2d;
+  --panel-borde: #26304a;
+  --texto: #e5e9f2;
+  --texto-suave: #93a0b8;
+  --acento: #4f8cff;
+  --verde: #38d39f;
+  --rojo: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--texto);
+}
+
+a {
+  color: var(--texto-suave);
+  text-decoration: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+}
+
+a.activo,
+a:hover {
+  color: var(--texto);
+  background: var(--panel-borde);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Barra superior */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.2rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-borde);
+  position: sticky;
+  top: 0;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand {
+  font-weight: 600;
+  margin-right: 1rem;
+  color: var(--acento);
+}
+
+.live {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(56, 211, 159, 0.15);
+  color: var(--verde);
+}
+
+.live.reconectando {
+  background: rgba(255, 107, 107, 0.12);
+  color: var(--rojo);
+}
+
+/* Contenido */
+.contenido {
+  padding: 1.2rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.toolbar h2,
+.estado-error h2 {
+  margin: 0;
+}
+
+.meta {
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.btn {
+  background: var(--acento);
+  color: #fff;
+  border: 0;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.filtro {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--texto-suave);
+}
+
+.filtro select,
+.tabla {
+  background: var(--panel);
+  color: var(--texto);
+  border: 1px solid var(--panel-borde);
+}
+
+/* Tarjetas y graficos */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--panel-borde);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.card-titulo {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--texto-suave);
+}
+
+.chart {
+  height: 320px;
+}
+
+.grid-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1rem;
+}
+
+/* Tabla bitacora */
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tabla th,
+.tabla td {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--panel-borde);
+}
+
+.tabla th {
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+
+.tabla tbody tr:hover {
+  background: rgba(79, 140, 255, 0.08);
+}
+
+.tag {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: rgba(79, 140, 255, 0.15);
+  color: var(--acento);
+}
+
+.tag-limpieza {
+  background: rgba(56, 211, 159, 0.15);
+  color: var(--verde);
+}
+
+.tag-preprocesamiento {
+  background: rgba(255, 193, 105, 0.15);
+  color: #ffc169;
+}
+
+/* Estados */
+.placeholder {
+  color: var(--texto-suave);
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.estado-error {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  color: var(--rojo);
+}
+
+.estado-error .hint {
+  color: var(--texto-suave);
+}
+
+.estado-error code {
+  background: var(--panel);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
