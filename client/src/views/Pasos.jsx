@@ -195,7 +195,7 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
   const completado = Boolean(res && res.ok);
 
   return (
-    <li className={`paso-card${completado ? ' completado' : ''}`}>
+    <li className={`paso-card${completado ? ' completado' : ''}`} style={paso.id === 1 ? { display: 'none' } : undefined}>
       <div className="paso-riel" aria-hidden="true">
         <span className="paso-numero">{paso.id}</span>
       </div>
