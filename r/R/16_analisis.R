@@ -182,7 +182,7 @@ graficos_comparacion <- function(cmp) {
 
 # Deja las tablas (CSV) y los gráficos (PNG) listos para que el dashboard los lea
 guardar_analisis <- function(a, dir = "salida/analisis", graficos = TRUE) {
-  nom <- if (inherits(a, "comparacion_periodos")) paste(names(a$periodos), collapse = "_vs_") else a$periodo$nombre
+  nom <- if (inherits(a, "comparacion_periodos")) paste(a$periodos[[1]]$nombre, a$periodos[[2]]$nombre, sep = " vs ") else a$periodo$nombre
   d <- file.path(dir, gsub("[^A-Za-z0-9_-]+", "_", nom)); dir.create(d, recursive = TRUE, showWarnings = FALSE)
   w <- function(x, f) if (!is.null(x) && is.data.frame(x) && nrow(x)) escribir_csv(x, file.path(d, f))
   if (inherits(a, "comparacion_periodos")) {
