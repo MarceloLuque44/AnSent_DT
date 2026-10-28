@@ -19,7 +19,7 @@
 # ------------------------------------------------------------------------------
 # 0. Validar paquetes requeridos
 # ------------------------------------------------------------------------------
-paquetes <- c("plumber", "jsonlite", "httr")
+paquetes <- c("plumber", "jsonlite", "httr", "readxl")
 faltan <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
 if (length(faltan)) {
   cat("\n====================================================================\n")
@@ -34,6 +34,7 @@ if (length(faltan)) {
 library(plumber)
 library(jsonlite)
 library(httr)
+library(readxl)
 
 # Filtro CORS para permitir peticiones desde el frontend (Vite en puerto 5173)
 cors_filter <- function(req, res) {
@@ -48,7 +49,7 @@ cors_filter <- function(req, res) {
   plumber::forward()
 }
 
-cat("[Plumber] Paquetes R cargados: plumber, jsonlite, httr\n")
+cat("[Plumber] Paquetes R cargados: plumber, jsonlite, httr, readxl\n")
 
 # ------------------------------------------------------------------------------
 # 1. Determinar la carpeta del proyecto R (r/)
@@ -1002,6 +1003,7 @@ BITACORAS_DIR <- file.path(PROYECTO, "bitacoras")
   archivos <- list()
   for (f in list.files(BITACORAS_DIR, full.names = TRUE, recursive = FALSE)) {
     if (file.exists(f) && !file.info(f)$isdir) {
+      if (startsWith(basename(f), "~$")) next # Ignorar temporales de Excel (~$*.xlsx)
       ext <- tolower(tools::file_ext(f))
       hojas <- NULL
       if (ext == "xlsx") {
@@ -1157,7 +1159,10 @@ cat("  GET  http://localhost:8765/salida/<archivo>?pagina=&por_pagina=    - Endp
 cat("       /salida/emojis_en_uso  /salida/emojis_pendientes  /salida/mensajes_incluidos\n")
 cat("       /salida/mensajes_excluidos  /salida/stopwords_aplicadas  /salida/tokens  /salida/resumen\n")
 cat("  GET  http://localhost:8765/bitacoras - Archivos de r/bitacoras (JSON)\n")
-cat("  GET  http://localhost:8765/bitacoras/<archivo>?hoja=&pagina=&por_pagina= - Contenido paginado (xlsx/json)\n")
+for (b in RUTAS_BITACORAS) {
+  cat("  GET  http://localhost:8765/bitacoras/", b$ruta,
+      "?hoja=&pagina=&por_pagina= - Contenido paginado de ", b$archivo, "\n", sep = "")
+}
 cat("  GET  http://localhost:8765/dashboard/graficos - Imagenes agrupadas por carpeta (dashboard)\n")
 cat("  GET  http://localhost:8765/archivos/*  - Servir archivos estaticos (imagenes)\n")
 

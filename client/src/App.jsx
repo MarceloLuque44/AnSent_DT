@@ -1,9 +1,8 @@
 /**
- * Router simple basado en hash: #/dashboard | #/pasos | #/bitacora
+ * Router simple basado en hash: #/dashboard | #/pasos | #/salida | #/bitacoras
  */
 import { useEffect, useState } from 'react';
 import Dashboard from './views/Dashboard.jsx';
-import Bitacora from './views/Bitacora.jsx';
 import Pasos from './views/Pasos.jsx';
 import Salida from './views/Salida.jsx';
 import Bitacoras from './views/Bitacoras.jsx';
@@ -12,7 +11,6 @@ import LiveBadge from './LiveBadge.jsx';
 const VISTAS = {
   dashboard: Dashboard,
   pasos: Pasos,
-  bitacora: Bitacora,
   salida: Salida,
   bitacoras: Bitacoras,
 };
@@ -44,14 +42,11 @@ export default function App() {
           <a href="#/pasos" className={ruta === 'pasos' ? 'activo' : ''}>
             Pasos (API R)
           </a>
-          <a href="#/bitacora" className={ruta === 'bitacora' ? 'activo' : ''}>
-            Bitácora
-          </a>
           <a href="#/salida" className={ruta === 'salida' ? 'activo' : ''}>
             Salida
           </a>
           <a href="#/bitacoras" className={ruta === 'bitacoras' ? 'activo' : ''}>
-            Bitácoras (R)
+            Bitácora
           </a>
         </nav>
         <LiveBadge />
