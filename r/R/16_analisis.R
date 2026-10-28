@@ -102,15 +102,38 @@ analizar_periodo <- function(datos, fecha_inicio = NULL, fecha_fin = NULL,
   res
 }
 
-comparar_periodos <- function(datos, periodoA, periodoB, periodos = cargar_periodos(), libreria = TRUE,
+comparar_periodos <- function(datos, fecha_inicio_a = NULL, fecha_fin_a = NULL,
+                              fecha_inicio_b = NULL, fecha_fin_b = NULL,
+                              periodoA = NULL, periodoB = NULL, periodos = cargar_periodos(), libreria = TRUE,
                               max_mensajes_libreria = 5000, registrar = TRUE, dir_bitacoras = "bitacoras") {
-  lp <- periodos_lista(list(periodoA, periodoB), periodos, datos$mensajes$fecha)
-  nA <- names(lp)[1]; nB <- names(lp)[2]
-  m <- rbind(filtrar_periodo(datos$mensajes, lp[[1]]), filtrar_periodo(datos$mensajes, lp[[2]]))
+  if (!is.null(fecha_inicio_a) || !is.null(fecha_fin_a) ||
+      !is.null(fecha_inicio_b) || !is.null(fecha_fin_b)) {
+    fiA <- as.Date(fecha_inicio_a %||% min(datos$mensajes$fecha, na.rm = TRUE))
+    ffA <- as.Date(fecha_fin_a %||% max(datos$mensajes$fecha, na.rm = TRUE))
+    fiB <- as.Date(fecha_inicio_b %||% min(datos$mensajes$fecha, na.rm = TRUE))
+    ffB <- as.Date(fecha_fin_b %||% max(datos$mensajes$fecha, na.rm = TRUE))
+    perA <- list(nombre = paste0(format(fiA, "%Y-%m-%d"), "_a_", format(ffA, "%Y-%m-%d")),
+                 inicio = fiA, fin = ffA)
+    perB <- list(nombre = paste0(format(fiB, "%Y-%m-%d"), "_a_", format(ffB, "%Y-%m-%d")),
+                 inicio = fiB, fin = ffB)
+    lp <- list(A = perA, B = perB)
+    nA <- lp$A$nombre; nB <- lp$B$nombre
+    mA <- subset(datos$mensajes, as.Date(fecha) >= fiA & as.Date(fecha) <= ffA)
+    mB <- subset(datos$mensajes, as.Date(fecha) >= fiB & as.Date(fecha) <= ffB)
+    tkA <- subset(datos$tokens, as.Date(fecha) >= fiA & as.Date(fecha) <= ffA)
+    tkB <- subset(datos$tokens, as.Date(fecha) >= fiB & as.Date(fecha) <= ffB)
+    m <- rbind(mA, mB)
+    tk <- rbind(tkA, tkB)
+  } else {
+    lp <- periodos_lista(list(periodoA, periodoB), periodos, datos$mensajes$fecha)
+    nA <- names(lp)[1]; nB <- names(lp)[2]
+    m <- rbind(filtrar_periodo(datos$mensajes, lp[[1]]), filtrar_periodo(datos$mensajes, lp[[2]]))
+    tk <- rbind(filtrar_periodo(datos$tokens, lp[[1]]), filtrar_periodo(datos$tokens, lp[[2]]))
+  }
   res <- list(periodos = lp)
   res$niveles <- niveles_por_periodo(datos$mensajes, lp)
   res$serie <- serie_sentimientos(m)
-  res$tfidf <- tryCatch(tfidf_comparar(datos$tokens, lp[[1]], lp[[2]]), error = function(e) NULL)
+  res$tfidf <- tryCatch(tfidf_comparar(tk, lp[[1]], lp[[2]]), error = function(e) NULL)
   res$interpretacion <- interpretar_comparacion(res$niveles, nA, nB)
   if (libreria) {
     lib <- lapply(names(lp), function(nm) tryCatch(
