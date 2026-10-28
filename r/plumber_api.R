@@ -647,7 +647,8 @@ function(req, res) {
   tryCatch(
     {
       body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
-      periodo <- body$periodo %||% c("2023-01-01", "2023-03-31")
+      fecha_inicio <- body$fecha_inicio %||% NULL
+      fecha_fin <- body$fecha_fin %||% NULL
       dir_salida <- body$dir_salida %||% file.path(PROYECTO, "salida")
       dir_analisis <- body$dir_analisis %||% SALIDA_ANALISIS
       k <- as.integer(body$k %||% 6)
@@ -655,7 +656,8 @@ function(req, res) {
       shallow <- isTRUE(body$shallow %||% TRUE)
       libreria <- isTRUE(body$libreria %||% TRUE)
 
-      cat("[Plumber] Paso 2: Variables -> periodo:", paste(periodo, collapse = ", "), "\n")
+      cat("[Plumber] Paso 2: Variables -> fecha_inicio:", fecha_inicio %||% "NULL", "\n")
+      cat("[Plumber] Paso 2: Variables -> fecha_fin:", fecha_fin %||% "NULL", "\n")
       cat("[Plumber] Paso 2: Variables -> dir_salida:", dir_salida, "\n")
       cat("[Plumber] Paso 2: Variables -> dir_analisis:", dir_analisis, "\n")
       cat("[Plumber] Paso 2: Variables -> k:", k, "\n")
@@ -666,7 +668,7 @@ function(req, res) {
       datos <- cargar_datos_analisis(dir_salida)
       cat("[Plumber] Paso 2: Datos cargados desde", dir_salida, "\n")
       a <- analizar_periodo(
-        datos, periodo = periodo, k = k, agrupar = agrupar,
+        datos, fecha_inicio = fecha_inicio, fecha_fin = fecha_fin, k = k, agrupar = agrupar,
         shallow = shallow, libreria = libreria,
         registrar = TRUE, dir_bitacoras = file.path(PROYECTO, "bitacoras"),
         dir_salida = dir_salida
@@ -729,16 +731,19 @@ function(req, res) {
   tryCatch(
     {
       body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
-      periodoA <- body$periodoA
-      periodoB <- body$periodoB
-      if (is.null(periodoA) || is.null(periodoB)) {
+      fecha_inicio_a <- body$fecha_inicio_a %||% NULL
+      fecha_fin_a <- body$fecha_fin_a %||% NULL
+      fecha_inicio_b <- body$fecha_inicio_b %||% NULL
+      fecha_fin_b <- body$fecha_fin_b %||% NULL
+      if (is.null(fecha_inicio_a) && is.null(fecha_fin_a) &&
+          is.null(fecha_inicio_b) && is.null(fecha_fin_b)) {
         res$setHeader("Content-Type", "application/json")
         res$status <- 400
         return(jsonlite::toJSON(list(
           ok = FALSE,
           paso = 3,
           nombre = "Comparacion de periodos",
-          error = "Se requieren periodoA y periodoB en el cuerpo de la peticion"
+          error = "Se requieren fecha_inicio_a/fecha_fin_a y fecha_inicio_b/fecha_fin_b en el cuerpo de la peticion"
         ), auto_unbox = TRUE))
       }
 
@@ -746,8 +751,10 @@ function(req, res) {
       dir_analisis <- body$dir_analisis %||% SALIDA_ANALISIS
       libreria <- isTRUE(body$libreria %||% TRUE)
 
-      cat("[Plumber] Paso 3: Variables -> periodoA:", periodoA, "\n")
-      cat("[Plumber] Paso 3: Variables -> periodoB:", periodoB, "\n")
+      cat("[Plumber] Paso 3: Variables -> fecha_inicio_a:", fecha_inicio_a %||% "NULL", "\n")
+      cat("[Plumber] Paso 3: Variables -> fecha_fin_a:", fecha_fin_a %||% "NULL", "\n")
+      cat("[Plumber] Paso 3: Variables -> fecha_inicio_b:", fecha_inicio_b %||% "NULL", "\n")
+      cat("[Plumber] Paso 3: Variables -> fecha_fin_b:", fecha_fin_b %||% "NULL", "\n")
       cat("[Plumber] Paso 3: Variables -> dir_salida:", dir_salida, "\n")
       cat("[Plumber] Paso 3: Variables -> dir_analisis:", dir_analisis, "\n")
       cat("[Plumber] Paso 3: Variables -> libreria:", libreria, "\n")
@@ -755,7 +762,9 @@ function(req, res) {
       datos <- cargar_datos_analisis(dir_salida)
       cat("[Plumber] Paso 3: Datos cargados desde", dir_salida, "\n")
       cmp <- comparar_periodos(
-        datos, periodoA, periodoB,
+        datos,
+        fecha_inicio_a = fecha_inicio_a, fecha_fin_a = fecha_fin_a,
+        fecha_inicio_b = fecha_inicio_b, fecha_fin_b = fecha_fin_b,
         libreria = libreria,
         registrar = TRUE, dir_bitacoras = file.path(PROYECTO, "bitacoras")
       )
@@ -1439,7 +1448,8 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     tryCatch(
       {
         body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
-        periodo <- body$periodo %||% c("2023-01-01", "2023-03-31")
+        fecha_inicio <- body$fecha_inicio %||% NULL
+        fecha_fin <- body$fecha_fin %||% NULL
         dir_salida <- body$dir_salida %||% file.path(PROYECTO, "salida")
       dir_analisis <- body$dir_analisis %||% SALIDA_ANALISIS
       k <- as.integer(body$k %||% 6)
@@ -1447,9 +1457,10 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
       shallow <- isTRUE(body$shallow %||% TRUE)
       libreria <- isTRUE(body$libreria %||% TRUE)
 
-      cat("[Plumber] Paso 2: Variables -> periodo:", paste(periodo, collapse = ", "), "\n")
-      cat("[Plumber] Paso 2: Variables -> dir_salida:", dir_salida, "\n")
-      cat("[Plumber] Paso 2: Variables -> dir_analisis:", dir_analisis, "\n")
+        cat("[Plumber] Paso 2: Variables -> fecha_inicio:", fecha_inicio %||% "NULL", "\n")
+        cat("[Plumber] Paso 2: Variables -> fecha_fin:", fecha_fin %||% "NULL", "\n")
+        cat("[Plumber] Paso 2: Variables -> dir_salida:", dir_salida, "\n")
+        cat("[Plumber] Paso 2: Variables -> dir_analisis:", dir_analisis, "\n")
         cat("[Plumber] Paso 2: Variables -> k:", k, "\n")
         cat("[Plumber] Paso 2: Variables -> agrupar:", agrupar, "\n")
         cat("[Plumber] Paso 2: Variables -> shallow:", shallow, "\n")
@@ -1458,7 +1469,7 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
         datos <- cargar_datos_analisis(dir_salida)
         cat("[Plumber] Paso 2: Datos cargados desde", dir_salida, "\n")
         a <- analizar_periodo(
-          datos, periodo = periodo, k = k, agrupar = agrupar,
+          datos, fecha_inicio = fecha_inicio, fecha_fin = fecha_fin, k = k, agrupar = agrupar,
           shallow = shallow, libreria = libreria,
           registrar = TRUE, dir_bitacoras = file.path(PROYECTO, "bitacoras"),
           dir_salida = dir_salida
@@ -1516,15 +1527,18 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     tryCatch(
       {
         body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
-        periodoA <- body$periodoA
-        periodoB <- body$periodoB
-        if (is.null(periodoA) || is.null(periodoB)) {
+        fecha_inicio_a <- body$fecha_inicio_a %||% NULL
+        fecha_fin_a <- body$fecha_fin_a %||% NULL
+        fecha_inicio_b <- body$fecha_inicio_b %||% NULL
+        fecha_fin_b <- body$fecha_fin_b %||% NULL
+        if (is.null(fecha_inicio_a) && is.null(fecha_fin_a) &&
+            is.null(fecha_inicio_b) && is.null(fecha_fin_b)) {
           return(list(
             ok = FALSE,
             paso = 3,
             nombre = "Comparacion de periodos",
-            error = "Se requieren periodoA y periodoB en el cuerpo de la peticion",
-            mensaje = "Faltan parametros periodoA y periodoB"
+            error = "Se requieren fecha_inicio_a/fecha_fin_a y fecha_inicio_b/fecha_fin_b en el cuerpo de la peticion",
+            mensaje = "Faltan parametros de fechas de ambos periodos"
           ))
         }
 
@@ -1532,16 +1546,20 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
       dir_analisis <- body$dir_analisis %||% SALIDA_ANALISIS
       libreria <- isTRUE(body$libreria %||% TRUE)
 
-      cat("[Plumber] Paso 3: Variables -> periodoA:", periodoA, "\n")
-      cat("[Plumber] Paso 3: Variables -> periodoB:", periodoB, "\n")
-      cat("[Plumber] Paso 3: Variables -> dir_salida:", dir_salida, "\n")
-      cat("[Plumber] Paso 3: Variables -> dir_analisis:", dir_analisis, "\n")
-      cat("[Plumber] Paso 3: Variables -> libreria:", libreria, "\n")
+        cat("[Plumber] Paso 3: Variables -> fecha_inicio_a:", fecha_inicio_a %||% "NULL", "\n")
+        cat("[Plumber] Paso 3: Variables -> fecha_fin_a:", fecha_fin_a %||% "NULL", "\n")
+        cat("[Plumber] Paso 3: Variables -> fecha_inicio_b:", fecha_inicio_b %||% "NULL", "\n")
+        cat("[Plumber] Paso 3: Variables -> fecha_fin_b:", fecha_fin_b %||% "NULL", "\n")
+        cat("[Plumber] Paso 3: Variables -> dir_salida:", dir_salida, "\n")
+        cat("[Plumber] Paso 3: Variables -> dir_analisis:", dir_analisis, "\n")
+        cat("[Plumber] Paso 3: Variables -> libreria:", libreria, "\n")
 
         datos <- cargar_datos_analisis(dir_salida)
         cat("[Plumber] Paso 3: Datos cargados desde", dir_salida, "\n")
         cmp <- comparar_periodos(
-          datos, periodoA, periodoB,
+          datos,
+          fecha_inicio_a = fecha_inicio_a, fecha_fin_a = fecha_fin_a,
+          fecha_inicio_b = fecha_inicio_b, fecha_fin_b = fecha_fin_b,
           libreria = libreria,
           registrar = TRUE, dir_bitacoras = file.path(PROYECTO, "bitacoras")
         )
