@@ -23,6 +23,19 @@ export async function apiPost(path, body) {
   return res.json();
 }
 
+export async function apiPut(path, body) {
+  const res = await fetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
 /**
  * Cliente directo hacia la API de Plumber (R), saltando Express.
  * Requiere que Plumber este corriendo en http://localhost:8765.

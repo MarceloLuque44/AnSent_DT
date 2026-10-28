@@ -996,6 +996,55 @@ function() {
 }
 
 # ------------------------------------------------------------------------------
+# 7b. Endpoint PUT para escribir la configuracion de sentimientos en r/config/sentimientos.json
+# ------------------------------------------------------------------------------
+
+#* Escribir configuracion de sentimientos (activo true/false)
+#* @put /sentimientos.json
+function(req, res) {
+  cat("[Plumber] PUT /sentimientos.json: Escribiendo configuracion de sentimientos...\n")
+  tryCatch(
+    {
+      ruta <- file.path(PROYECTO, "config", "sentimientos.json")
+      cat("[Plumber] PUT /sentimientos.json: Ruta:", ruta, "\n")
+      if (!file.exists(ruta)) {
+        res$status <- 404
+        return(jsonlite::toJSON(list(ok = FALSE, error = "Archivo de sentimientos no encontrado"), auto_unbox = TRUE))
+      }
+      body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+      sentimientos <- body$sentimientos
+      if (is.null(sentimientos) || !is.list(sentimientos)) {
+        res$status <- 400
+        return(jsonlite::toJSON(list(ok = FALSE, error = "Se requiere el campo 'sentimientos' con la lista"), auto_unbox = TRUE))
+      }
+      obj <- jsonlite::fromJSON(ruta, simplifyDataFrame = FALSE)
+      if (is.null(obj$sentimientos) || !is.list(obj$sentimientos)) {
+        res$status <- 400
+        return(jsonlite::toJSON(list(ok = FALSE, error = "El archivo no contiene un arreglo de sentimientos"), auto_unbox = TRUE))
+      }
+      porNombre <- setNames(obj$sentimientos, vapply(obj$sentimientos, function(s) s$nombre, character(1)))
+      for (s in sentimientos) {
+        nombre <- s$nombre
+        activo <- isTRUE(s$activo)
+        if (!is.null(nombre) && nombre %in% names(porNombre)) {
+          porNombre[[nombre]]$activo <- activo
+        }
+      }
+      obj$sentimientos <- unname(porNombre)
+      jsonlite::writeJSON(obj, ruta, pretty = TRUE, auto_unbox = TRUE, na = "null")
+      res$setHeader("Content-Type", "application/json")
+      jsonlite::toJSON(list(ok = TRUE, archivo = "sentimientos.json", actualizados = length(sentimientos)), auto_unbox = TRUE)
+    },
+    error = function(e) {
+      cat("[Plumber] ERROR en PUT /sentimientos.json:", conditionMessage(e), "\n")
+      res$status <- 500
+      res$setHeader("Content-Type", "application/json")
+      jsonlite::toJSON(list(ok = FALSE, error = conditionMessage(e)), auto_unbox = TRUE)
+    }
+  )
+}
+
+# ------------------------------------------------------------------------------
 # 8. Ejecutar preprocesamiento (endpoint existente, mantenido por compatibilidad)
 #* @post /preprocesar
 function() {
@@ -1827,6 +1876,52 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
           total_imagenes = 0,
           mensaje = paste("Error listando imagenes:", conditionMessage(e))
         )
+      }
+    )
+  })
+
+  api_obj$handle("PUT", "/sentimientos.json", function(req, res) {
+    cat("[Plumber] PUT /sentimientos.json: Escribiendo configuracion de sentimientos...\n")
+    tryCatch(
+      {
+        ruta <- file.path(PROYECTO, "config", "sentimientos.json")
+        cat("[Plumber] PUT /sentimientos.json: Ruta:", ruta, "\n")
+        if (!file.exists(ruta)) {
+          res$status <- 404
+          res$setHeader("Content-Type", "application/json")
+          return(jsonlite::toJSON(list(ok = FALSE, error = "Archivo de sentimientos no encontrado"), auto_unbox = TRUE))
+        }
+        body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+        sentimientos <- body$sentimientos
+        if (is.null(sentimientos) || !is.list(sentimientos)) {
+          res$status <- 400
+          res$setHeader("Content-Type", "application/json")
+          return(jsonlite::toJSON(list(ok = FALSE, error = "Se requiere el campo 'sentimientos' con la lista"), auto_unbox = TRUE))
+        }
+        obj <- jsonlite::fromJSON(ruta, simplifyDataFrame = FALSE)
+        if (is.null(obj$sentimientos) || !is.list(obj$sentimientos)) {
+          res$status <- 400
+          res$setHeader("Content-Type", "application/json")
+          return(jsonlite::toJSON(list(ok = FALSE, error = "El archivo no contiene un arreglo de sentimientos"), auto_unbox = TRUE))
+        }
+        porNombre <- setNames(obj$sentimientos, vapply(obj$sentimientos, function(s) s$nombre, character(1)))
+        for (s in sentimientos) {
+          nombre <- s$nombre
+          activo <- isTRUE(s$activo)
+          if (!is.null(nombre) && nombre %in% names(porNombre)) {
+            porNombre[[nombre]]$activo <- activo
+          }
+        }
+        obj$sentimientos <- unname(porNombre)
+        jsonlite::writeJSON(obj, ruta, pretty = TRUE, auto_unbox = TRUE, na = "null")
+        res$setHeader("Content-Type", "application/json")
+        jsonlite::toJSON(list(ok = TRUE, archivo = "sentimientos.json", actualizados = length(sentimientos)), auto_unbox = TRUE)
+      },
+      error = function(e) {
+        cat("[Plumber] ERROR en PUT /sentimientos.json:", conditionMessage(e), "\n")
+        res$status <- 500
+        res$setHeader("Content-Type", "application/json")
+        jsonlite::toJSON(list(ok = FALSE, error = conditionMessage(e)), auto_unbox = TRUE)
       }
     )
   })

@@ -64,6 +64,8 @@ preprocesar <- function(ruta_archivo,
 
   cuerpo <- function() {
     etapa("Cargando diccionarios (config/)")
+    # dir_config = "config"
+    # sentimientos_activos = NULL
     cfg <- cargar_config(dir_config, sentimientos_activos)
     ctx <- nuevo_ctx(params, cfg)
     ctx$emojis_pendientes <- NULL

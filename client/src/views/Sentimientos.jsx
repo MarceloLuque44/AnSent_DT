@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet } from '../api.js';
+import { apiGet, apiPut } from '../api.js';
 
 const ICONOS_POR_TIPO = {
   csv: '📄',
@@ -43,6 +43,7 @@ export default function Sentimientos() {
   const [contenidos, setContenidos] = useState({}); // nombre -> {cargando, datos, error}
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [sentimientosLista, setSentimientosLista] = useState([]); // {nombre, activo, orden}
   const activosRef = useRef(activos);
   activosRef.current = activos;
 
@@ -58,6 +59,16 @@ export default function Sentimientos() {
       Object.keys(activosRef.current).forEach((n) => {
         if (activosRef.current[n] && n) cargarContenido(n);
       });
+      // Cargar lista de sentimientos desde el archivo JSON
+      try {
+        const resp = await apiGet('/api/sentimientos/sentimientos.json');
+        const obj = resp.contenido;
+        if (obj && Array.isArray(obj.sentimientos)) {
+          setSentimientosLista(obj.sentimientos.map((s) => ({ nombre: s.nombre, activo: s.activo === true, orden: s.orden })));
+        }
+      } catch (e) {
+        // No bloquear la carga si falla el archivo de sentimientos
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -77,7 +88,7 @@ export default function Sentimientos() {
     }));
     try {
       const datos = await apiGet(`/api/sentimientos/${encodeURIComponent(nombre)}`);
-      if (!datos.ok) throw new Error(datos.error || 'Respuesta no valida');
+      if (!datos || datos.error) throw new Error(datos?.error || 'Respuesta no valida');
       setContenidos((prev) => ({
         ...prev,
         [nombre]: { cargando: false, datos, error: null },
@@ -99,6 +110,26 @@ export default function Sentimientos() {
       if (!cache?.datos && !cache?.cargando) {
         cargarContenido(nombre);
       }
+    }
+  };
+
+  const alternarSentimiento = async (nombre, activo) => {
+    try {
+      await apiPut('/api/sentimientos/sentimientos.json', { nombre, activo });
+      setSentimientosLista((prev) =>
+        prev.map((s) => (s.nombre === nombre ? { ...s, activo } : s))
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const guardarConfiguracion = async () => {
+    try {
+      await apiPut('/api/sentimientos/sentimientos.json', { sentimientos: sentimientosLista });
+      setError(null);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -182,64 +213,98 @@ export default function Sentimientos() {
                       )}
                       {contenidos[a.nombre]?.datos && (
                         <>
-                          {contenidos[a.nombre].datos.tipo === 'json' ? (
+                          {a.nombre === 'sentimientos.json' ? (
                             <div className="archivo-contenido-json">
-                              <pre>{JSON.stringify(contenidos[a.nombre].datos.contenido, null, 2)}</pre>
-                            </div>
-                          ) : (
-                            <>
                               <p className="archivo-contenido-meta">
-                                Archivo: <strong>{contenidos[a.nombre].datos.archivo}</strong>
+                                Activa o desactiva cada sentimiento:
                               </p>
-                              {contenidos[a.nombre].datos.tipo === 'csv' ? (
-                                <>
-                                  {(() => {
-                                    const parsed = parsearCSV(
-                                      contenidos[a.nombre].datos.contenido
-                                    );
-                                    if (!parsed.columnas.length) {
-                                      return (
-                                        <p className="estado-error">
-                                          No se pudieron leer las columnas del CSV.
-                                        </p>
-                                      );
-                                    }
-                                    return (
-                                      <>
-                                        <p className="archivo-contenido-meta">
-                                          <strong>{parsed.filas.length}</strong> fila(s) ·{' '}
-                                          <strong>{parsed.columnas.length}</strong> columna(s)
-                                        </p>
-                                        <div className="archivo-tabla-scroll">
-                                          <table className="tabla tabla-archivo">
-                                            <thead>
-                                              <tr>
-                                                {parsed.columnas.map((col) => (
-                                                  <th key={col}>{col}</th>
-                                                ))}
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {parsed.filas.map((fila, i) => (
-                                                <tr key={i}>
-                                                  {parsed.columnas.map((col) => (
-                                                    <td key={col}>
-                                                      {fila[col] == null ? '—' : String(fila[col])}
-                                                    </td>
-                                                  ))}
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </>
-                                    );
-                                  })()}
-                                </>
-                              ) : (
-                                <div className="archivo-contenido-txt">
-                                  <pre>{contenidos[a.nombre].datos.contenido}</pre>
+                              <div className="sentimientos-lista">
+                                {sentimientosLista.map((s) => (
+                                  <label
+                                    key={s.nombre}
+                                    className="sentimiento-item"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!!s.activo}
+                                      onChange={() => alternarSentimiento(s.nombre, !s.activo)}
+                                    />
+                                    <span className="sentimiento-nombre">
+                                      {s.orden}. {s.nombre}
+                                    </span>
+                                    <span className={`sentimiento-chip chip-${s.activo ? 'activo' : 'inactivo'}`}>
+                                      {s.activo ? 'ACTIVO' : 'INACTIVO'}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                              <button className="btn" onClick={guardarConfiguracion}>
+                                Guardar configuración
+                              </button>
+                            </div>
+                          ) : null}
+                          {a.nombre !== 'sentimientos.json' && (
+                            <>
+                              {contenidos[a.nombre].datos.tipo === 'json' ? (
+                                <div className="archivo-contenido-json">
+                                  <pre>{JSON.stringify(contenidos[a.nombre].datos.contenido, null, 2)}</pre>
                                 </div>
+                              ) : (
+                                <>
+                                  <p className="archivo-contenido-meta">
+                                    Archivo: <strong>{contenidos[a.nombre].datos.archivo}</strong>
+                                  </p>
+                                  {contenidos[a.nombre].datos.tipo === 'csv' ? (
+                                    <>
+                                      {(() => {
+                                        const parsed = parsearCSV(
+                                          contenidos[a.nombre].datos.contenido
+                                        );
+                                        if (!parsed.columnas.length) {
+                                          return (
+                                            <p className="estado-error">
+                                              No se pudieron leer las columnas del CSV.
+                                            </p>
+                                          );
+                                        }
+                                        return (
+                                          <>
+                                            <p className="archivo-contenido-meta">
+                                              <strong>{parsed.filas.length}</strong> fila(s) ·{' '}
+                                              <strong>{parsed.columnas.length}</strong> columna(s)
+                                            </p>
+                                            <div className="archivo-tabla-scroll">
+                                              <table className="tabla tabla-archivo">
+                                                <thead>
+                                                  <tr>
+                                                    {parsed.columnas.map((col) => (
+                                                      <th key={col}>{col}</th>
+                                                    ))}
+                                                  </tr>
+                                                </thead>
+                                                <tbody>
+                                                  {parsed.filas.map((fila, i) => (
+                                                    <tr key={i}>
+                                                      {parsed.columnas.map((col) => (
+                                                        <td key={col}>
+                                                          {fila[col] == null ? '—' : String(fila[col])}
+                                                        </td>
+                                                      ))}
+                                                    </tr>
+                                                  ))}
+                                                </tbody>
+                                              </table>
+                                            </div>
+                                          </>
+                                        );
+                                      })()}
+                                    </>
+                                  ) : (
+                                    <div className="archivo-contenido-txt">
+                                      <pre>{contenidos[a.nombre].datos.contenido}</pre>
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </>
                           )}
