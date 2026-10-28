@@ -151,14 +151,15 @@ function cuerpoInicial(id) {
       };
     case 2:
       return {
-        periodo: ['2023-01-01', '2023-03-31'],
+        fecha_inicio: '2023-01-01',
+        fecha_fin: '2023-03-31',
         k: 6,
         agrupar: 'dia',
         shallow: true,
         libreria: true,
       };
     case 3:
-      return { periodoA: 'todo_2023', periodoB: 'todo_2024', libreria: true };
+      return { fecha_inicio_a: '2023-01-01', fecha_fin_a: '2023-03-31', fecha_inicio_b: '2024-01-01', fecha_fin_b: '2024-03-31', libreria: true };
     case 4:
       return {
         texto: '',
@@ -363,25 +364,18 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
                       type="date"
                       className="input"
                       aria-label="Fecha de inicio del periodo"
-                      value={Array.isArray(body.periodo) ? body.periodo[0] : ''}
-                      onChange={(e) => {
-                        const p = Array.isArray(body.periodo) ? [...body.periodo] : [];
-                        p[0] = e.target.value;
-                        manejarCambio('periodo', p);
-                      }}
+                      value={body.fecha_inicio}
+                      onChange={(e) => manejarCambio('fecha_inicio', e.target.value)}
                     />
                     <input
                       type="date"
                       className="input"
                       aria-label="Fecha de fin del periodo"
-                      value={Array.isArray(body.periodo) ? body.periodo[1] : ''}
-                      onChange={(e) => {
-                        const p = Array.isArray(body.periodo) ? [...body.periodo] : [];
-                        p[1] = e.target.value;
-                        manejarCambio('periodo', p);
-                      }}
+                      value={body.fecha_fin}
+                      onChange={(e) => manejarCambio('fecha_fin', e.target.value)}
                     />
                   </div>
+                  <p className="campo-ayuda">Define el rango de fechas de los mensajes a analizar.</p>
                 </div>
 
                 <div className="campo">
@@ -396,6 +390,7 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
                     value={body.k}
                     onChange={(e) => manejarCambio('k', parseInt(e.target.value, 10) || 6)}
                   />
+                  <p className="campo-ayuda">Cuántos temas (clusters) identificar con LDA en los mensajes del periodo.</p>
                 </div>
 
                 <div className="campo">
@@ -411,6 +406,7 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
                     <option value="dia">Día</option>
                     <option value="mes">Mes</option>
                   </select>
+                  <p className="campo-ayuda">Intervalo de tiempo para agrupar la serie de sentimientos.</p>
                 </div>
 
                 <div className="campo-checks campo-ancho">
@@ -422,6 +418,7 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
                     />
                     Shallow linguistic (udpipe)
                   </label>
+                  <p className="campo-ayuda">Análisis morfosintáctico (partes del discurso, lemas) con UDPipe.</p>
                   <label className="campo-label checkbox-label">
                     <input
                       type="checkbox"
@@ -430,38 +427,53 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
                     />
                     Sentimientos de librería (syuzhet/NRC)
                   </label>
+                  <p className="campo-ayuda">Usar diccionarios externos (syuzhet/NRC) además del diccionario propio.</p>
                 </div>
               </>
             )}
 
             {paso.id === 3 && (
               <>
-                <div className="campo">
-                  <label className="campo-label" htmlFor="periodoA">
-                    Periodo A
-                  </label>
-                  <input
-                    id="periodoA"
-                    type="text"
-                    className="input"
-                    value={body.periodoA}
-                    onChange={(e) => manejarCambio('periodoA', e.target.value)}
-                    placeholder="ej: todo_2023 o 2023-01-01,2023-03-31"
-                  />
+                <div className="campo campo-ancho">
+                  <span className="campo-label">Periodo A (fecha inicio y fin)</span>
+                  <div className="campos-dos">
+                    <input
+                      type="date"
+                      className="input"
+                      aria-label="Fecha de inicio del periodo A"
+                      value={body.fecha_inicio_a}
+                      onChange={(e) => manejarCambio('fecha_inicio_a', e.target.value)}
+                    />
+                    <input
+                      type="date"
+                      className="input"
+                      aria-label="Fecha de fin del periodo A"
+                      value={body.fecha_fin_a}
+                      onChange={(e) => manejarCambio('fecha_fin_a', e.target.value)}
+                    />
+                  </div>
+                  <p className="campo-ayuda">Rango de fechas del primer periodo a comparar.</p>
                 </div>
 
-                <div className="campo">
-                  <label className="campo-label" htmlFor="periodoB">
-                    Periodo B
-                  </label>
-                  <input
-                    id="periodoB"
-                    type="text"
-                    className="input"
-                    value={body.periodoB}
-                    onChange={(e) => manejarCambio('periodoB', e.target.value)}
-                    placeholder="ej: todo_2024 o 2024-01-01,2024-03-31"
-                  />
+                <div className="campo campo-ancho">
+                  <span className="campo-label">Periodo B (fecha inicio y fin)</span>
+                  <div className="campos-dos">
+                    <input
+                      type="date"
+                      className="input"
+                      aria-label="Fecha de inicio del periodo B"
+                      value={body.fecha_inicio_b}
+                      onChange={(e) => manejarCambio('fecha_inicio_b', e.target.value)}
+                    />
+                    <input
+                      type="date"
+                      className="input"
+                      aria-label="Fecha de fin del periodo B"
+                      value={body.fecha_fin_b}
+                      onChange={(e) => manejarCambio('fecha_fin_b', e.target.value)}
+                    />
+                  </div>
+                  <p className="campo-ayuda">Rango de fechas del segundo periodo a comparar.</p>
                 </div>
 
                 <div className="campo-checks campo-ancho">
@@ -473,6 +485,7 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
                     />
                     Sentimientos de librería (syuzhet/NRC)
                   </label>
+                  <p className="campo-ayuda">Usar diccionarios externos (syuzhet/NRC) además del diccionario propio.</p>
                 </div>
               </>
             )}
