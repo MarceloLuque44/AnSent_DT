@@ -49,7 +49,9 @@
     "mil gracias",
     "muchas gracias",
     "bendiciones",
-    "dios le pague"
+    "dios le pague",
+    "grande hermano",
+    "se agradece de corazon"
    ],
    "raices": [
     "agradec",
@@ -88,7 +90,7 @@
     "polaridad": 1,
     "activo": true,
     "definicion": "Confianza y certeza sobre algo o alguien; sensación de estar protegido o respaldado.",
-    "palabras": ["seguro", "segura", "seguros", "seguras", "seguridad", "confianza", "confiable", "confiado", "confiada", "certeza", "estoy seguro", "estoy segura", "sin duda", "garantizado", "garantizada", "firme", "protegido", "protegida", "respaldo"],
+    "palabras": ["seguro", "segura", "seguros", "seguras", "seguridad", "confianza", "confiable", "confiado", "confiada", "certeza", "estoy seguro", "estoy segura", "sin duda", "garantizado", "garantizada", "firme", "protegido", "protegida", "respaldo", "no ve", "no vee"],
     "raices": ["segur", "garant"]
   },
   {
@@ -103,6 +105,7 @@
     "excelente",
     "crack",
     "capo",
+    "capa",
     "genio",
     "increible",
     "bravo",
@@ -114,7 +117,7 @@
     "recomiendo",
     "recomendable",
     "es bueno","es buena", "muy buena","muy bueno", "el mejor", "la mejor",
-     "enseña bien", "explica bien", "una joya"
+     "enseña bien", "explica bien", "una joya", "mis respetos"
    ],
    "raices": [
     "admir",
@@ -172,7 +175,8 @@
     "inesperado",
     "insolito",
     "raro",
-    "rara"
+    "rara",
+    "no te creo"
    ],
    "raices": [
     "sorpren",
@@ -231,7 +235,9 @@
     "apurense",
     "riesgo",
     "peligro",
-    "angustia"
+    "angustia",
+    "estoy fregado",
+    "estoy fregada"
    ],
    "raices": [
     "preocup",
@@ -315,7 +321,8 @@
     "queja",
     "injusto",
     "abuso",
-    "envidia"
+    "envidia",
+    "estoy renegando"
    ],
    "raices": [
     "enoj",
@@ -354,7 +361,11 @@
     "aplazado",
     "jale",
     "jalaron",
-    "f"
+    "f",
+    "que macana",
+    "lo fregaron",
+    "la fregaron",
+    "que chafas"
    ],
    "raices": [
     "decep",
@@ -421,7 +432,11 @@
     "quisiera saber",
     "quiero saber",
     "me gustaria saber",
-    "cuentame mas"
+    "cuentame mas",
+    "a ver",
+    "alguien sabe",
+    "me podrian decir",
+    "que paso"
    ],
    "raices": [
     "curios"

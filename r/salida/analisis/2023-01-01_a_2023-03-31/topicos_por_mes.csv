@@ -1,13 +1,13 @@
-﻿"anio_mes","topico","etiqueta","peso_pct"
-"2023-01","T1","grupo / hoy / presencial",17.18418094134653
-"2023-02","T1","grupo / hoy / presencial",16.372994933092805
-"2023-01","T2","materia / piso / emoji_cara_llorando",18.211349699392755
-"2023-02","T2","materia / piso / emoji_cara_llorando",12.844420457463718
-"2023-01","T3","gracias / semestre / clases",17.4679153321782
-"2023-02","T3","gracias / semestre / clases",16.9934647395612
-"2023-01","T4","materias / calculo / convalidar",14.559445600217776
-"2023-02","T4","materias / calculo / convalidar",18.35729982161662
-"2023-01","T5","carrera / informatica / dia",17.33328281143709
-"2023-02","T5","carrera / informatica / dia",17.562199317401916
-"2023-01","T6","disculpen / fila / materias",15.24382561542765
-"2023-02","T6","disculpen / fila / materias",17.869620730863748
+﻿anio_mes,topico,etiqueta,peso_pct
+2023-01,T1,materia / hoy / grupo,19.72314548
+2023-02,T1,materia / hoy / grupo,13.26027752
+2023-01,T2,disculpen / semestre / mañana,15.14408321
+2023-02,T2,disculpen / semestre / mañana,19.59854728
+2023-01,T3,no / materias / calculo,16.66241287
+2023-02,T3,no / materias / calculo,17.98319458
+2023-01,T4,gracias / dia / dinero,16.44252531
+2023-02,T4,gracias / dia / dinero,17.16515491
+2023-01,T5,carrera / informatica / virtual,15.50548774
+2023-02,T5,carrera / informatica / virtual,17.09165815
+2023-01,T6,piso / documentos / compañeros,16.5223454
+2023-02,T6,piso / documentos / compañeros,14.90116756

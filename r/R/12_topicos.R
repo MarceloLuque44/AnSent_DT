@@ -33,6 +33,7 @@ topicos_lda <- function(tokens, k = 6, agrupar = c("dia", "mes"), min_tokens_doc
   post  <- topicmodels::posterior(mod)
   beta  <- post$terms      # tópico x término
   gamma <- post$topics     # documento x tópico
+  rownames(gamma) <- docs
 
   etiqueta <- apply(beta, 1, function(b) paste(names(sort(b, decreasing = TRUE))[1:3], collapse = " / "))
   ids <- paste0("T", seq_len(k))

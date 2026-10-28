@@ -36,10 +36,7 @@ leer_entrada <- function(ruta, chat = NULL) {
 
 leer_telegram_json <- function(ruta, chat = NULL) {
   j <- jsonlite::fromJSON(ruta, simplifyVector = FALSE)
-
-  # Soportar tanto exportación de todos los chats (j$chats$list) como un chat
-  # individual con messages en la raíz (j$messages).
-  if (!is.null(j$chats) && !is.null(j$chats$list)) {
+  if (!is.null(j$chats)) {                       # "Exportar todos los chats"
     lista <- j$chats$list
     nombres <- vapply(lista, function(c) c$name %||% "(sin nombre)", character(1))
     if (is.null(chat)) {
@@ -50,12 +47,8 @@ leer_telegram_json <- function(ruta, chat = NULL) {
     }
     j <- lista[[chat]]
   }
-
-  if (is.null(j$messages)) {
-    stop("No se encontró el campo 'messages'. Verifica que sea el result.json de Telegram.",
-         "\n  Claves encontradas en la raíz: ",
-         paste(names(j), collapse = ", "))
-  }
+  if (is.null(j$messages))
+    stop("No se encontró el campo 'messages'. Verifica que sea el result.json de Telegram.")
   msgs <- j$messages
   g <- function(m, k) { v <- m[[k]]; if (is.null(v)) NA else v }
   chr <- function(f) vapply(msgs, function(m) { v <- f(m); if (length(v) != 1) NA_character_ else as.character(v) }, character(1))

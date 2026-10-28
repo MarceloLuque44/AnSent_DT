@@ -1,105 +1,20 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
-import { apiGet } from '../api';
-import { useSse } from '../sse';
-
-/** Construye la URL de una imagen servida por Express. */
-const urlImagen = (carpeta, nombre) =>
-  `/salida-cliente/analisis/${encodeURIComponent(carpeta)}/${encodeURIComponent(nombre)}`;
+import { useDashboard } from '../dashboardStore.jsx';
 
 /**
- * Dashboard: muestra las imagenes de los graficos (PNG) agrupados por carpeta.
- * - Los botones flotantes se generan con las carpetas que existen en
- *   client/src/views/salida/analisis y se actualizan en tiempo real (SSE + poll).
- * - Cada carpeta seleccionada genera una columna; las columnas se reparten
- *   el ancho equitativamente.
- * - Con una sola columna, las imagenes se muestran dos por fila.
- * - Con mas de una columna, cada imagen ocupa el 100% del ancho de su columna.
+ * Dashboard: lienzo de graficos (PNG) agrupados por carpeta.
+ * - Las carpetas y sus graficos se activan desde el arbol del menu
+ *   "Dashboard" en la barra lateral (dashboardStore).
+ * - Cada carpeta activa genera una columna; con una sola columna las
+ *   imagenes se muestran dos por fila y con varias, a ancho completo.
+ * - El lienzo ocupa todo el ancho disponible.
  */
 export default function Dashboard() {
   const [imagenAmpliada, setImagenAmpliada] = useState(null);
-  const [carpetas, setCarpetas] = useState({});
-  const [carpetasActivas, setCarpetasActivas] = useState(new Set());
-  /** Por carpeta: Set de graficos descheckeados (ausente = todos visibles) */
-  const [graficosOcultos, setGraficosOcultos] = useState({});
+  const { carpetas, carpetasActivas, graficosOcultos } = useDashboard();
   const polarRef = useRef(null);
   const polarChart = useRef(null);
-
-  const cargarCarpetas = useCallback(async () => {
-    try {
-      const { carpetas: lista } = await apiGet(
-        '/api/dashboard/carpetas-imagenes'
-      );
-      if (!Array.isArray(lista)) return;
-      setCarpetas((prev) => {
-        const siguiente = {};
-        for (const c of lista) {
-          siguiente[c.carpeta] = c.imagenes.map((nombre) => ({
-            nombre,
-            ruta: urlImagen(c.carpeta, nombre),
-          }));
-        }
-        // Conservar carpetas cargadas anteriormente que ya no existen,
-        // para que las columnas activas no desaparezcan de golpe.
-        for (const nombre of Object.keys(prev)) {
-          if (!(nombre in siguiente)) siguiente[nombre] = prev[nombre];
-        }
-        return siguiente;
-      });
-      // Quitar del estado activo las carpetas que ya no existen
-      setCarpetasActivas((prev) => {
-        const nombres = new Set(lista.map((c) => c.carpeta));
-        const siguiente = new Set([...prev].filter((n) => nombres.has(n)));
-        return siguiente.size === prev.size ? prev : siguiente;
-      });
-    } catch {
-      // Sin servidor disponible: se reintenta en el siguiente evento/poll
-    }
-  }, []);
-
-  // Carga inicial y refresco periodico (fallback del SSE)
-  useEffect(() => {
-    cargarCarpetas();
-    const interval = setInterval(cargarCarpetas, 30000);
-    return () => clearInterval(interval);
-  }, [cargarCarpetas]);
-
-  // Actualizacion en tiempo real: el servidor notifica cambios en la carpeta
-  useSse('dashboard-imagenes', cargarCarpetas);
-
-  // Si las carpetas activas dejan de existir, limpiar
-  useEffect(() => {
-    for (const nombre of carpetasActivas) {
-      if (!carpetas[nombre]) {
-        setCarpetasActivas((prev) => {
-          const siguiente = new Set(prev);
-          siguiente.delete(nombre);
-          return siguiente;
-        });
-      }
-    }
-  }, [carpetas, carpetasActivas]);
-
-  const toggleCarpeta = (nombre) => {
-    setCarpetasActivas((prev) => {
-      const siguiente = new Set(prev);
-      if (siguiente.has(nombre)) siguiente.delete(nombre);
-      else siguiente.add(nombre);
-      return siguiente;
-    });
-  };
-
-  const estaActivo = (nombre) => carpetasActivas.has(nombre);
-
-  /** Check / uncheck de un grafico concreto dentro de una carpeta */
-  const alternarGrafico = (carpeta, grafico, visible) => {
-    setGraficosOcultos((prev) => {
-      const actuales = new Set(prev[carpeta] ?? []);
-      if (visible) actuales.delete(grafico);
-      else actuales.add(grafico);
-      return { ...prev, [carpeta]: actuales };
-    });
-  };
 
   // Inicializar el grafico polar
   useEffect(() => {
@@ -111,162 +26,175 @@ export default function Dashboard() {
     };
   }, []);
 
-  const dibujarPolar = () => {
+  useEffect(() => {
     if (!polarChart.current) return;
+    const COLORES_EMOCION = {
+      'Alegría': '#4f9df7',
+      'Enojo': '#2f64c8',
+      'Tristeza': '#6c8fe0',
+      'Miedo': '#8a86e6',
+      'Sorpresa': '#35b6d9',
+      'Repugnancia': '#5fa6bd',
+      'Neutral': '#9bb4cf',
+    };
+    const emociones = ['Alegría', 'Enojo', 'Tristeza', 'Miedo', 'Sorpresa', 'Repugnancia', 'Neutral'];
+    const valores = [35, 12, 18, 8, 10, 5, 45];
     const option = {
       backgroundColor: 'transparent',
       tooltip: { trigger: 'item' },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        top: 'middle',
-        textStyle: { color: '#e5e9f2' },
-      },
       polar: {
-        center: ['55%', '55%'],
-        radius: [0, '60%'],
+        center: ['50%', '52%'],
+        radius: [0, '68%'],
       },
       angleAxis: {
         type: 'category',
-        data: ['Alegría', 'Enojo', 'Tristeza', 'Miedo', 'Sorpresa', 'Repugnancia', 'Neutral'],
-        axisLabel: { color: '#93a0b8' },
-        axisLine: { lineStyle: { color: '#26304a' } },
+        data: emociones,
+        axisLabel: {
+          fontFamily: 'Public Sans, sans-serif',
+          formatter: (valor) => `{${valor
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')}|${valor}}`,
+          rich: {
+            alegria: { color: '#4f9df7' },
+            enojo: { color: '#2f64c8' },
+            tristeza: { color: '#6c8fe0' },
+            miedo: { color: '#8a86e6' },
+            sorpresa: { color: '#35b6d9' },
+            repugnancia: { color: '#5fa6bd' },
+            neutral: { color: '#7f96b3' },
+          },
+        },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
       },
       radiusAxis: {
         type: 'value',
         max: 100,
-        axisLabel: { color: '#93a0b8' },
-        axisLine: { lineStyle: { color: '#26304a' } },
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
       },
       series: [
         {
           type: 'bar',
-          data: [35, 12, 18, 8, 10, 5, 45],
+          data: valores.map((v, i) => ({
+            value: v,
+            itemStyle: { color: COLORES_EMOCION[emociones[i]] ?? '#2563eb' },
+          })),
           coordinateSystem: 'polar',
           roundCap: true,
           itemStyle: {
-            color: '#4f8cff',
             borderRadius: [0, 0, 4, 4],
           },
         },
       ],
     };
     polarChart.current.setOption(option, true);
-  };
-
-  useEffect(() => {
-    dibujarPolar();
   }, []);
 
   useEffect(() => {
-    if (!polarRef.current || !polarChart.current) return;
-    polarChart.current.resize();
+    const alRedimensionar = () => polarChart.current?.resize();
+    window.addEventListener('resize', alRedimensionar);
+    return () => window.removeEventListener('resize', alRedimensionar);
   }, []);
 
-  // Carpetas existentes para los botones flotantes
+  // Resize al cambiar el numero de columnas
+  useEffect(() => {
+    const id = setTimeout(() => polarChart.current?.resize(), 60);
+    return () => clearTimeout(id);
+  }, [carpetasActivas.size]);
+
   const nombresCarpetas = Object.keys(carpetas);
-
+  const totalGraficos = Object.values(carpetas).reduce(
+    (n, imgs) => n + imgs.length,
+    0
+  );
   // Una sola columna: imagenes dos por fila; mas de una: imagen a 100% del ancho
   const modoInterno = carpetasActivas.size === 1 ? 'doble' : 'sencilla';
 
   return (
     <div>
-      <div className="toolbar">
-        <h2>Dashboard</h2>
-        <span className="meta">
-          Graficos de salida — {nombresCarpetas.length}{' '}
-          {nombresCarpetas.length === 1 ? 'carpeta' : 'carpetas'} disponibles
-        </span>
-      </div>
-
-      <div className="toolbar-toggle">
-        {nombresCarpetas.map((nombre) => {
-          const ocultos = graficosOcultos[nombre] ?? new Set();
-          return (
-            <div key={nombre} className="fila-carpeta">
-              <button
-                className={`btn-toggle ${estaActivo(nombre) ? 'activo' : ''}`}
-                onClick={() => toggleCarpeta(nombre)}
-              >
-                <span className="btn-toggle-indicador">
-                  {carpetas[nombre]?.length ?? 0}
-                </span>
-                {nombre}
-              </button>
-              {/* Checks por grafico (todos checkeados por defecto) */}
-              <div className="checks-carpeta">
-                {(carpetas[nombre] ?? []).map((img) => (
-                  <label key={img.nombre} className="check-grafico">
-                    <input
-                      type="checkbox"
-                      checked={!ocultos.has(img.nombre)}
-                      onChange={(e) =>
-                        alternarGrafico(nombre, img.nombre, e.target.checked)
-                      }
-                    />
-                    <span>{img.nombre}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {carpetasActivas.size > 0 && (
-        <div
-          className="columnas-carpetas"
-          style={{
-            gridTemplateColumns: `repeat(${carpetasActivas.size}, minmax(0, 1fr))`,
-          }}
-        >
-          {[...carpetasActivas].map((nombre) => (
-            <div key={nombre} className="columna-imagenes">
-              <div className="titulo-columna">{nombre}</div>
-              <div className={`imagenes-interno ${modoInterno}`}>
-                {(carpetas[nombre] ?? [])
-                  .filter((img) => !(graficosOcultos[nombre] ?? new Set()).has(img.nombre))
-                  .map((img) => (
-                  <figure
-                    key={img.nombre}
-                    className="tarjeta-imagen"
-                    onClick={() =>
-                      setImagenAmpliada({
-                        nombre: img.nombre,
-                        carpeta: nombre,
-                        ruta: img.ruta,
-                      })
-                    }
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <img
-                      src={img.ruta}
-                      alt={img.nombre}
-                      loading="lazy"
-                      className="imagen-llena"
-                    />
-                    <figcaption>{img.nombre}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            </div>
-          ))}
+      <header className="page-head">
+        <div className="page-head-texto">
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-desc">
+            Gráficos de salida del análisis. Abre el menú Dashboard de la
+            navegación para activar carpetas y elegir sus gráficos.
+          </p>
         </div>
-      )}
+        <span className="page-chip">
+          {nombresCarpetas.length}{' '}
+          {nombresCarpetas.length === 1 ? 'carpeta' : 'carpetas'} · {totalGraficos}{' '}
+          {totalGraficos === 1 ? 'gráfico' : 'gráficos'}
+        </span>
+      </header>
 
-      <section className="seccion-carpeta">
-        <h3 className="titulo-carpeta">Rosa de los sentimientos (Polar)</h3>
-        <div ref={polarRef} className="chart-polar" />
+      <section className="lienzo" aria-label="Gráficos seleccionados">
+        {carpetasActivas.size > 0 ? (
+          <div
+            className="columnas-carpetas"
+            style={{
+              gridTemplateColumns: `repeat(${carpetasActivas.size}, minmax(0, 1fr))`,
+            }}
+          >
+            {[...carpetasActivas].map((nombre) => (
+              <div key={nombre} className="columna-imagenes">
+                <div className="titulo-columna">{nombre}</div>
+                <div className={`imagenes-interno ${modoInterno}`}>
+                  {(carpetas[nombre] ?? [])
+                    .filter(
+                      (img) =>
+                        !(graficosOcultos[nombre] ?? new Set()).has(img.nombre)
+                    )
+                    .map((img) => (
+                      <figure
+                        key={img.nombre}
+                        className="tarjeta-imagen"
+                        onClick={() =>
+                          setImagenAmpliada({
+                            nombre: img.nombre,
+                            carpeta: nombre,
+                            ruta: img.ruta,
+                          })
+                        }
+                      >
+                        <img
+                          src={img.ruta}
+                          alt={img.nombre}
+                          loading="lazy"
+                          className="imagen-llena"
+                        />
+                        <figcaption>{img.nombre}</figcaption>
+                      </figure>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="lienzo-vacio">
+            <p className="lienzo-vacio-titulo">Sin gráficos en pantalla</p>
+            <p className="lienzo-vacio-texto">
+              {nombresCarpetas.length > 0
+                ? 'Abre el menú Dashboard y activa una carpeta con su interruptor para ver sus gráficos aquí.'
+                : 'Cuando el análisis genere gráficos, aparecerán en el menú Dashboard.'}
+            </p>
+          </div>
+        )}
+
       </section>
 
       {imagenAmpliada && (
-        <div
-          className="overlay-imagen"
-          onClick={() => setImagenAmpliada(null)}
-        >
+        <div className="overlay-imagen" onClick={() => setImagenAmpliada(null)}>
           <div className="overlay-contenido">
+            <button
+              type="button"
+              className="overlay-cerrar"
+              onClick={() => setImagenAmpliada(null)}
+            >
+              Cerrar
+            </button>
             <img src={imagenAmpliada.ruta} alt={imagenAmpliada.nombre} />
-            <div className="overlay-cerrar">Cerrar (X)</div>
           </div>
         </div>
       )}

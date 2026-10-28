@@ -12,7 +12,7 @@
 #   cmp <- comparar_periodos(datos, "todo_2023", "todo_2024")      # A contra B
 #   cmp$interpretacion;  graficos_comparacion(cmp)$arana
 #
-#   guardar_analisis(a)   # deja CSV/PNG en client/src/views/salida/analisis/<periodo>/ (para el dashboard)
+#   guardar_analisis(a)   # deja CSV/PNG en salida/analisis/<periodo>/ (para el dashboard)
 # Cada análisis queda anotado en bitacoras/bitacora_completa.xlsx, hoja "Experimentos".
 # ==============================================================================
 
@@ -148,7 +148,7 @@ graficos_comparacion <- function(cmp) {
 }
 
 # Deja las tablas (CSV) y los gráficos (PNG) listos para que el dashboard los lea
-guardar_analisis <- function(a, dir = file.path("client", "src", "views", "salida", "analisis"), graficos = TRUE) {
+guardar_analisis <- function(a, dir = "salida/analisis", graficos = TRUE) {
   nom <- if (inherits(a, "comparacion_periodos")) paste(names(a$periodos), collapse = "_vs_") else a$periodo$nombre
   d <- file.path(dir, gsub("[^A-Za-z0-9_-]+", "_", nom)); dir.create(d, recursive = TRUE, showWarnings = FALSE)
   w <- function(x, f) if (!is.null(x) && is.data.frame(x) && nrow(x)) escribir_csv(x, file.path(d, f))
@@ -162,7 +162,7 @@ guardar_analisis <- function(a, dir = file.path("client", "src", "views", "salid
     if (!is.null(a$shallow)) { w(a$shallow$upos, "shallow_categorias.csv"); w(a$shallow$lemas, "shallow_lemas.csv"); w(a$shallow$frases_nominales, "shallow_frases_nominales.csv") }
     if (!is.null(a$stopwords)) { w(a$stopwords$eliminadas, "stopwords_eliminadas.csv"); w(a$stopwords$conservadas, "stopwords_conservadas.csv") }
     writeLines(a$interpretacion, file.path(d, "interpretacion.txt"), useBytes = TRUE)
-    gr <- if (graficos) graficos_periodo(a) else list()
+    gr <- if (graficos) graficos_todos(a) else list()
   }
   for (nm in names(gr)) try(.gg()$ggsave(file.path(d, paste0(nm, ".png")), gr[[nm]], width = 9, height = 6, dpi = 120), silent = TRUE)
   message("Análisis guardado en ", d)

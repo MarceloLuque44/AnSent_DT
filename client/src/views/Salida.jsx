@@ -153,15 +153,18 @@ export default function Salida() {
 
   return (
     <div>
-      <div className="toolbar">
-        <h2>Archivos de salida</h2>
-        <span className="filtro">
-          Carpeta: <code>{carpeta ?? 'r/salida'}</code>
-        </span>
+      <header className="page-head">
+        <div className="page-head-texto">
+          <h1 className="page-title">Archivos de salida</h1>
+          <p className="page-desc">
+            Contenido generado directamente en <code>{carpeta ?? 'r/salida'}</code>.
+            Activa un archivo para leerlo aquí mismo.
+          </p>
+        </div>
         <button className="btn" onClick={cargar} disabled={cargando}>
           {cargando ? 'Cargando…' : 'Refrescar'}
         </button>
-      </div>
+      </header>
 
       {error && <p className="estado-error">Error: {error}</p>}
 
@@ -171,17 +174,27 @@ export default function Salida() {
 
       {archivos.length > 0 && (
         <>
-          <p className="archivo-total">
-            {archivos.length} archivo(s) · {contarActivos()} seleccionado(s) ·{' '}
-            {archivos.length - contarActivos()} sin seleccionar
+          <p className="resumen-chips">
+            <span className="chip">{archivos.length} archivos</span>
+            <span className="chip chip-activo">{contarActivos()} abiertos</span>
+            <span className="chip chip-tenue">
+              {archivos.length - contarActivos()} cerrados
+            </span>
           </p>
 
           <div className="lista-salida">
             {archivos.map((a) => (
               <div key={a.nombre} className={`archivo-item${activos[a.nombre] ? ' activo' : ''}`}>
                 <div className="archivo-fila">
-                  <span className="archivo-icono">{iconosPorTipo[a.tipo] ?? '🗎'}</span>
-                  <span className="archivo-nombre">{a.nombre}</span>
+                  <span className="archivo-icono" aria-hidden="true">
+                    {iconosPorTipo[a.tipo] ?? '🗎'}
+                  </span>
+                  <div className="archivo-identidad">
+                    <span className="archivo-nombre">{a.nombre}</span>
+                    <span className="archivo-datos">
+                      {(a.tamano_bytes / 1024).toFixed(1)} KB · {a.modificado}
+                    </span>
+                  </div>
                   <span className={`tag tag-tipo-${a.tipo || 'desconocido'}`}>
                     {a.tipo ? a.tipo.toUpperCase() : 'SIN TIPO'}
                   </span>
@@ -201,10 +214,6 @@ export default function Salida() {
                   <div className="archivo-detalle">
                     <p>
                       <strong>Ruta:</strong> <code>{a.ruta}</code>
-                    </p>
-                    <p>
-                      <strong>Tamaño:</strong> {(a.tamano_bytes / 1024).toFixed(1)} KB ·{' '}
-                      <strong>Modificado:</strong> {a.modificado}
                     </p>
 
                     <div className="archivo-contenido">

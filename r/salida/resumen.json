@@ -15,9 +15,9 @@
   "rango_fechas": ["2022-12-26", "2026-10-17"],
   "sentimientos_activos": ["alegria", "gratitud", "esperanza", "seguridad", "admiracion", "satisfaccion_tranquilidad", "sorpresa", "confusion", "preocupacion", "tristeza", "enojo", "decepcion", "frustracion_cansancio", "ironia", "curiosidad"],
   "polaridad": {
-    "negativo": 1181,
-    "neutral": 16137,
-    "positivo": 2178
+    "negativo": 1184,
+    "neutral": 16133,
+    "positivo": 2179
   },
   "emojis_pendientes": 0,
   "pasos_bitacora": 52

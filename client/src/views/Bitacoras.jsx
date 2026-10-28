@@ -227,15 +227,18 @@ export default function Bitacoras() {
 
   return (
     <div>
-      <div className="toolbar">
-        <h2>Bitácoras (r/bitacoras)</h2>
-        <span className="filtro">
-          Carpeta: <code>{carpeta ?? 'r/bitacoras'}</code>
-        </span>
+      <header className="page-head">
+        <div className="page-head-texto">
+          <h1 className="page-title">Bitácora</h1>
+          <p className="page-desc">
+            Registros del proceso guardados en <code>{carpeta ?? 'r/bitacoras'}</code>.
+            Elige un archivo y, si es una hoja de cálculo, su hoja.
+          </p>
+        </div>
         <button className="btn" onClick={cargarLista} disabled={carga.estado === 'cargando'}>
           {carga.estado === 'cargando' ? 'Cargando…' : 'Refrescar'}
         </button>
-      </div>
+      </header>
 
       {carga.estado === 'error' && <p className="estado-error">Error listando bitacoras: {carga.error}</p>}
       {carga.estado === 'lista' && archivos.length === 0 && (
@@ -244,7 +247,7 @@ export default function Bitacoras() {
 
       {/* Selector 1: bitacora (archivo) */}
       {archivos.length > 0 && (
-        <div className="toolbar bitacora-selectores">
+        <div className="panel-controles bitacora-selectores">
           <label className="filtro">
             Bitácora:
             <select
@@ -282,11 +285,15 @@ export default function Bitacoras() {
 
       {archivo && (
         <p className="archivo-contenido-meta">
-          <strong>{iconosPorTipo[archivo.tipo] ?? '🗎'} {archivo.nombre}</strong> ·{' '}
-          {(archivo.tamano_bytes / 1024).toFixed(1)} KB · modificado: {archivo.modificado}
+          <strong>{iconosPorTipo[archivo.tipo] ?? '🗎'} {archivo.nombre}</strong>
+          <span className="meta-sep">·</span>
+          {(archivo.tamano_bytes / 1024).toFixed(1)} KB
+          <span className="meta-sep">·</span>
+          modificado: {archivo.modificado}
           {datos && (
             <>
-              {' '}· <strong>{datos.nFilas}</strong> fila(s) · <strong>{datos.nColumnas}</strong> columna(s)
+              <span className="meta-sep">·</span>
+              <strong>{datos.nFilas}</strong> fila(s) · <strong>{datos.nColumnas}</strong> columna(s)
               {datos.hojaUsada && <> · hoja: <strong>{datos.hojaUsada}</strong></>}
             </>
           )}
@@ -381,10 +388,10 @@ export default function Bitacoras() {
           {serie && serie.length > 0 && (
             <ResponsiveContainer width="100%" height={340}>
               <LineChart data={serie} margin={{ top: 12, right: 24, bottom: 8, left: 12 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#8884" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#d8e6f7" />
                 <XAxis
                   dataKey="registro"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: '#5a7392' }}
                   interval="preserveStartEnd"
                   angle={-45}
                   textAnchor="end"
@@ -392,7 +399,7 @@ export default function Bitacoras() {
                   label={{ value: 'Registro (id_paso)', position: 'insideBottomRight', offset: -4, fontSize: 11 }}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: '#5a7392' }}
                   label={{ value: 'Filas después', angle: -90, position: 'insideLeft', fontSize: 11 }}
                 />
                 <Tooltip
