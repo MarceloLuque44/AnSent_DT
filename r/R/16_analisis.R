@@ -40,13 +40,23 @@ interpretar_comparacion <- function(niv_largo, nombreA, nombreB) {
     "Lectura descriptiva: diferencias pequeñas pueden deberse al azar o a que un periodo tiene menos mensajes; revisa n_mensajes.")
 }
 
-analizar_periodo <- function(datos, periodo = NULL, periodos = cargar_periodos(), k = 6, agrupar = "dia",
+analizar_periodo <- function(datos, fecha_inicio = NULL, fecha_fin = NULL,
+                             periodo = NULL, periodos = cargar_periodos(), k = 6, agrupar = "dia",
                              shallow = TRUE, libreria = TRUE, max_mensajes_shallow = 1500,
                              max_mensajes_libreria = 5000, modelo_udpipe = NULL,
                              registrar = TRUE, dir_bitacoras = "bitacoras", dir_salida = "salida") {
-  per <- resolver_periodo(periodo, periodos, datos$mensajes$fecha)
-  m  <- filtrar_periodo(datos$mensajes, per)
-  tk <- filtrar_periodo(datos$tokens, per)
+  if (!is.null(fecha_inicio) || !is.null(fecha_fin)) {
+    fi <- as.Date(fecha_inicio %||% min(datos$mensajes$fecha, na.rm = TRUE))
+    ff <- as.Date(fecha_fin %||% max(datos$mensajes$fecha, na.rm = TRUE))
+    per <- list(nombre = paste0(format(fi, "%Y-%m-%d"), "_a_", format(ff, "%Y-%m-%d")),
+                inicio = fi, fin = ff)
+    m <- subset(datos$mensajes, as.Date(fecha) >= fi & as.Date(fecha) <= ff)
+    tk <- subset(datos$tokens, as.Date(fecha) >= fi & as.Date(fecha) <= ff)
+  } else {
+    per <- resolver_periodo(periodo, periodos, datos$mensajes$fecha)
+    m  <- filtrar_periodo(datos$mensajes, per)
+    tk <- filtrar_periodo(datos$tokens, per)
+  }
   if (!is.null(tk)) tk <- tk[!tk$token %in% PALABRAS_SIN_TEMA, , drop = FALSE]
   if (!nrow(m)) stop("No hay mensajes en el periodo ", per$nombre, ".", call. = FALSE)
   res <- list(periodo = per, n_mensajes = nrow(m))
