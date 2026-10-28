@@ -8,6 +8,7 @@ import Dashboard from './views/Dashboard.jsx';
 import Pasos from './views/Pasos.jsx';
 import Salida from './views/Salida.jsx';
 import Bitacoras from './views/Bitacoras.jsx';
+import Sentimientos from './views/Sentimientos.jsx';
 import LiveBadge from './LiveBadge.jsx';
 import { DashboardProvider, useDashboard } from './dashboardStore.jsx';
 
@@ -16,6 +17,7 @@ const VISTAS = {
   pasos: Pasos,
   salida: Salida,
   bitacoras: Bitacoras,
+  sentimientos: Sentimientos,
 };
 
 const NAVEGACION = [
@@ -23,6 +25,7 @@ const NAVEGACION = [
   { id: 'pasos', etiqueta: 'Pasos', descripcion: 'Ejecutar el proceso' },
   { id: 'salida', etiqueta: 'Salida', descripcion: 'Archivos generados' },
   { id: 'bitacoras', etiqueta: 'Bitácora', descripcion: 'Registros del proceso' },
+  { id: 'sentimientos', etiqueta: 'Sentimientos', descripcion: 'Diccionarios y configuración' },
 ];
 
 function obtenerRutaActual() {

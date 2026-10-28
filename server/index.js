@@ -5,9 +5,10 @@ import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import dashboardRoutes from './routes/dashboard.js';
 import bitacoraRoutes from './routes/bitacora.js';
-import eventsRoutes from './routes/events.js';
+import eventosRoutes from './routes/events.js';
 import configuracionesRoutes from './routes/configuraciones.js';
 import pasosRoutes from './routes/pasos.js';
+import sentimientosRoutes from './routes/sentimientos.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,9 +30,10 @@ app.use(
 // API
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/bitacora', bitacoraRoutes);
-app.use('/api/events', eventsRoutes);
+app.use('/api/events', eventosRoutes);
 app.use('/api/configuraciones', configuracionesRoutes);
 app.use('/api/pasos', pasosRoutes);
+app.use('/api/sentimientos', sentimientosRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
