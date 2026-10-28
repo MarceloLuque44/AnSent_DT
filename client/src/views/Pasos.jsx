@@ -13,31 +13,27 @@ import CsvPaso from '../components/CsvPaso.jsx';
 const PASOS = [
   {
     id: 1,
-    nombre: 'Paso 1 — Preprocesamiento completo',
+    nombre: 'Preprocesamiento completo',
     descripcion: 'Ejecuta preprocesar() sobre el dataset de entrada (data/result.json). Genera mensajes_limpios.csv, tokens.csv, resumen.json, bitacoras, etc.',
     endpoint: '1',
-    icono: '🔄',
   },
   {
     id: 2,
-    nombre: 'Paso 2 — Analisis por periodo',
+    nombre: 'Análisis por periodo',
     descripcion: 'Ejecuta analizar_periodo() + guardar_analisis(). Filtra por fechas, calcula nivel de sentimiento, serie mensual, TF-IDF, LDA, shallow y librería. Genera CSV y PNG.',
     endpoint: '2',
-    icono: '📊',
   },
   {
     id: 3,
-    nombre: 'Paso 3 — Comparar dos periodos',
+    nombre: 'Comparar dos periodos',
     descripcion: 'Ejecuta comparar_periodos() entre dos periodos y guarda resultados. Compara niveles, serie, TF-IDF y sentimientos de libreria.',
     endpoint: '3',
-    icono: '⚖️',
   },
   {
     id: 4,
-    nombre: 'Paso 4 — Analisis de una oracion',
+    nombre: 'Análisis de una oración',
     descripcion: 'Ejecuta analizar_oracion() sobre una sola oracion con el mismo preprocesamiento que el dataset.',
     endpoint: '4',
-    icono: '💬',
   },
 ];
 
@@ -106,17 +102,20 @@ export default function PasosView() {
 
   return (
     <div>
-      <div className="toolbar">
-        <h2>Ejecución de pasos (API de R)</h2>
-        <span className="meta">
-          La API de Express ejecuta los comandos existentes en Plumber (R)
-          y devuelve las rutas en memoria de los archivos generados.
-        </span>
-      </div>
+      <header className="page-head">
+        <div className="page-head-texto">
+          <h1 className="page-title">Pasos del análisis</h1>
+          <p className="page-desc">
+            La API de Express ejecuta los comandos existentes en Plumber (R) y
+            devuelve las rutas en memoria de los archivos generados.
+          </p>
+        </div>
+        <span className="page-chip">4 pasos</span>
+      </header>
 
       {error && <p className="estado-error">{error}</p>}
 
-      <div className="grid-pasos">
+      <ol className="lista-pasos">
         {PASOS.map((paso) => (
           <FormularioPaso
             key={paso.id}
@@ -129,7 +128,7 @@ export default function PasosView() {
             archivos={archivos[paso.id]}
           />
         ))}
-      </div>
+      </ol>
     </div>
   );
 }
@@ -138,7 +137,18 @@ export default function PasosView() {
 function cuerpoInicial(id) {
   switch (id) {
     case 1:
-      return {};
+      return {
+        fecha_inicio: '',
+        fecha_fin: '',
+        responsable: '',
+        excluir_publicidad: true,
+        umbral_publicidad: 4,
+        anonimizar_autor: true,
+        min_chars_duplicado: 25,
+        consola: 'silencioso',
+        csv_para_excel: false,
+        preguntar_cambios: false,
+      };
     case 2:
       return {
         periodo: ['2023-01-01', '2023-03-31'],
@@ -181,231 +191,441 @@ function FormularioPaso({ paso, ejecutarPaso, guardarConfiguracion, configuracio
   const res = resultado;
   const imgs = archivos?.imagenes || [];
   const csVs = archivos?.csvs || [];
+  const completado = Boolean(res && res.ok);
 
   return (
-    <div className="card paso-card">
-      <div className="paso-header">
-        <span className="paso-icono">{paso.icono}</span>
-        <div>
-          <h3>{paso.nombre}</h3>
-          <p className="paso-desc">{paso.descripcion}</p>
-        </div>
+    <li className={`paso-card${completado ? ' completado' : ''}`}>
+      <div className="paso-riel" aria-hidden="true">
+        <span className="paso-numero">{paso.id}</span>
       </div>
 
-      <form onSubmit={manejarEnvio} className="form-paso">
-        {paso.id === 1 && (
-          <>
-            <label className="campo-label">Archivo de entrada</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="data/result.json"
-              disabled
-              title="El paso 1 usa data/result.json por defecto"
-            />
-            <p className="campo-ayuda">Usa data/result.json (dataset de Telegram por defecto).</p>
-          </>
-        )}
-
-        {paso.id === 2 && (
-          <>
-            <label className="campo-label">Periodo (fecha inicio y fin)</label>
-            <div className="campos-dos">
-              <input
-                type="date"
-                className="input"
-                value={Array.isArray(body.periodo) ? body.periodo[0] : ''}
-                onChange={(e) => {
-                  const p = Array.isArray(body.periodo) ? [...body.periodo] : [];
-                  p[0] = e.target.value;
-                  manejarCambio('periodo', p);
-                }}
-              />
-              <input
-                type="date"
-                className="input"
-                value={Array.isArray(body.periodo) ? body.periodo[1] : ''}
-                onChange={(e) => {
-                  const p = Array.isArray(body.periodo) ? [...body.periodo] : [];
-                  p[1] = e.target.value;
-                  manejarCambio('periodo', p);
-                }}
-              />
-            </div>
-            <label className="campo-label">Numero de topicos (k, LDA)</label>
-            <input
-              type="number"
-              className="input"
-              min="1"
-              value={body.k}
-              onChange={(e) => manejarCambio('k', parseInt(e.target.value, 10) || 6)}
-            />
-            <label className="campo-label">Agrupar documentos</label>
-            <select
-              className="input"
-              value={body.agrupar}
-              onChange={(e) => manejarCambio('agrupar', e.target.value)}
-            >
-              <option value="dia">Dia</option>
-              <option value="mes">Mes</option>
-            </select>
-            <label className="campo-label checkbox-label">
-              <input
-                type="checkbox"
-                checked={body.shallow}
-                onChange={(e) => manejarCambio('shallow', e.target.checked)}
-              />
-              Shallow linguistic (udpipe)
-            </label>
-            <label className="campo-label checkbox-label">
-              <input
-                type="checkbox"
-                checked={body.libreria}
-                onChange={(e) => manejarCambio('libreria', e.target.checked)}
-              />
-              Sentimientos de libreria (syuzhet/NRC)
-            </label>
-          </>
-        )}
-
-        {paso.id === 3 && (
-          <>
-            <label className="campo-label">Periodo A</label>
-            <input
-              type="text"
-              className="input"
-              value={body.periodoA}
-              onChange={(e) => manejarCambio('periodoA', e.target.value)}
-              placeholder="ej: todo_2023 o 2023-01-01,2023-03-31"
-            />
-            <label className="campo-label">Periodo B</label>
-            <input
-              type="text"
-              className="input"
-              value={body.periodoB}
-              onChange={(e) => manejarCambio('periodoB', e.target.value)}
-              placeholder="ej: todo_2024 o 2024-01-01,2024-03-31"
-            />
-            <label className="campo-label checkbox-label">
-              <input
-                type="checkbox"
-                checked={body.libreria}
-                onChange={(e) => manejarCambio('libreria', e.target.checked)}
-              />
-              Sentimientos de libreria (syuzhet/NRC)
-            </label>
-          </>
-        )}
-
-        {paso.id === 4 && (
-          <>
-            <label className="campo-label">Oracion a analizar</label>
-            <textarea
-              className="input textarea"
-              value={body.texto}
-              onChange={(e) => manejarCambio('texto', e.target.value)}
-              rows="3"
-              placeholder="Ej: Hola, no entiendo el laboratorio de INF 111, ayuda por favor"
-            />
-            <label className="campo-label checkbox-label">
-              <input
-                type="checkbox"
-                checked={body.usar_udpipe}
-                onChange={(e) => manejarCambio('usar_udpipe', e.target.checked)}
-              />
-              Shallow linguistic (udpipe)
-            </label>
-            <label className="campo-label checkbox-label">
-              <input
-                type="checkbox"
-                checked={body.usar_libreria}
-                onChange={(e) => manejarCambio('usar_libreria', e.target.checked)}
-              />
-              Sentimientos de libreria (syuzhet/NRC)
-            </label>
-            <label className="campo-label checkbox-label">
-              <input
-                type="checkbox"
-                checked={body.usar_topicos}
-                onChange={(e) => manejarCambio('usar_topicos', e.target.checked)}
-              />
-              Incluir topic modeling (LDA)
-            </label>
-          </>
-        )}
-
-        <div className="form-actions">
-          <label className="campo-label">Guardar configuracion como</label>
-          <input
-            type="text"
-            className="input"
-            value={nombreCfg}
-            onChange={(e) => setNombreCfg(e.target.value)}
-            placeholder="Nombre opcional para guardar esta configuracion"
-          />
-          <button
-            type="submit"
-            className="btn btn-ejecutar"
-            disabled={cargando}
-          >
-            {cargando ? 'Ejecutando…' : `Ejecutar ${paso.nombre.split('—')[1].trim()}`}
-          </button>
-        </div>
-      </form>
-
-      {res && res.ok && (
-        <div className="resultado-ok">
-          <p className="exito">✓ {res.mensaje || 'Paso completado exitosamente'}</p>
-          {res.version !== undefined && <span className="meta">Version del dataset: {res.version}</span>}
-          {res.n_mensajes !== undefined && <span className="meta">Mensajes: {res.n_mensajes}</span>}
-          {res.dir_analisis && (
-            <p className="campo-ayuda">Directorio de analisis: {res.dir_analisis}</p>
-          )}
-          {res.interpretacion && (
-            <div className="interpretacion">
-              <strong>Interpretacion:</strong> {res.interpretacion}
-            </div>
-          )}
-        </div>
-      )}
-
-      {res && !res.ok && (
-        <div className="estado-error">
-          <p>Error en el paso {paso.id}: {res.mensaje || res.error || 'Desconocido'}</p>
-        </div>
-      )}
-
-      {imgs.length > 0 && (
-        <div className="seccion-archivos">
-          <h4>Imagenes generadas (PNG)</h4>
-          <div className="grid-imagenes">
-            {imgs.map((img) => (
-              <ImagenPaso key={img.id} img={img} />
-            ))}
+      <div className="paso-cuerpo">
+        <header className="paso-header">
+          <div>
+            <span className="paso-etiqueta">Paso {paso.id}</span>
+            <h2 className="paso-titulo">{paso.nombre}</h2>
+            <p className="paso-desc">{paso.descripcion}</p>
           </div>
-        </div>
-      )}
+          {completado && <span className="paso-estado">Completado</span>}
+        </header>
 
-      {csVs.length > 0 && (
-        <div className="seccion-archivos">
-          <h4>Archivos CSV</h4>
-          <CsvPaso paso={paso.id} csvs={csVs} />
-        </div>
-      )}
+        <form onSubmit={manejarEnvio} className="form-paso">
+          <div className="form-campos">
+            {paso.id === 1 && (
+              <>
+                <div className="campo campo-ancho">
+                  <label className="campo-label" htmlFor={`entrada-${paso.id}`}>
+                    Archivo de entrada
+                  </label>
+                  <input
+                    id={`entrada-${paso.id}`}
+                    type="text"
+                    className="input"
+                    placeholder="data/result.json"
+                    disabled
+                    title="El paso 1 usa data/result.json por defecto"
+                  />
+                  <p className="campo-ayuda">Usa data/result.json (dataset de Telegram por defecto).</p>
+                </div>
 
-      {configuraciones.length > 0 && (
-        <div className="seccion-config">
-          <h4>Configuraciones guardadas para este paso</h4>
-          <ul class="lista-config">
-            {configuraciones.map((c) => (
-              <li key={c.id}>
-                <strong>{c.nombre}</strong> — {c.parametros ? JSON.stringify(c.parametros).slice(0, 100) : ''}
-                <span className="meta">actualizado {new Date(c.actualizado_en).toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+                <div className="campo campo-ancho">
+                  <label className="campo-label" htmlFor={`fecha-inicio-${paso.id}`}>
+                    Fecha de inicio (YYYY-MM-DD)
+                  </label>
+                  <input
+                    id={`fecha-inicio-${paso.id}`}
+                    type="text"
+                    className="input"
+                    value={body.fecha_inicio}
+                    onChange={(e) => manejarCambio('fecha_inicio', e.target.value)}
+                    placeholder="2023-01-01"
+                  />
+                  <p className="campo-ayuda">Filtra mensajes desde esta fecha (opcional).</p>
+                </div>
+
+                <div className="campo campo-ancho">
+                  <label className="campo-label" htmlFor={`fecha-fin-${paso.id}`}>
+                    Fecha de fin (YYYY-MM-DD)
+                  </label>
+                  <input
+                    id={`fecha-fin-${paso.id}`}
+                    type="text"
+                    className="input"
+                    value={body.fecha_fin}
+                    onChange={(e) => manejarCambio('fecha_fin', e.target.value)}
+                    placeholder="2023-12-31"
+                  />
+                  <p className="campo-ayuda">Filtra mensajes hasta esta fecha (opcional).</p>
+                </div>
+
+                <div className="campo campo-ancho">
+                  <label className="campo-label" htmlFor={`responsable-${paso.id}`}>
+                    Responsable
+                  </label>
+                  <input
+                    id={`responsable-${paso.id}`}
+                    type="text"
+                    className="input"
+                    value={body.responsable}
+                    onChange={(e) => manejarCambio('responsable', e.target.value)}
+                    placeholder="Nombre del responsable"
+                  />
+                  <p className="campo-ayuda">Nombre que se registra en la bitácora.</p>
+                </div>
+
+                <div className="campo-checks campo-ancho">
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.excluir_publicidad}
+                      onChange={(e) => manejarCambio('excluir_publicidad', e.target.checked)}
+                    />
+                    Excluir publicidad/anuncios
+                  </label>
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.anonimizar_autor}
+                      onChange={(e) => manejarCambio('anonimizar_autor', e.target.checked)}
+                    />
+                    Anonimizar autor
+                  </label>
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.csv_para_excel}
+                      onChange={(e) => manejarCambio('csv_para_excel', e.target.checked)}
+                    />
+                    CSV con BOM para Excel
+                  </label>
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.preguntar_cambios}
+                      onChange={(e) => manejarCambio('preguntar_cambios', e.target.checked)}
+                    />
+                    Preguntar cambios de código/diccionarios
+                  </label>
+                </div>
+
+                <div className="campo">
+                  <label className="campo-label" htmlFor={`umbral-${paso.id}`}>
+                    Umbral publicidad
+                  </label>
+                  <input
+                    id={`umbral-${paso.id}`}
+                    type="number"
+                    className="input"
+                    min="0"
+                    value={body.umbral_publicidad}
+                    onChange={(e) => manejarCambio('umbral_publicidad', parseInt(e.target.value, 10) || 4)}
+                  />
+                </div>
+
+                <div className="campo">
+                  <label className="campo-label" htmlFor={`minchars-${paso.id}`}>
+                    Mínimo caracteres duplicado
+                  </label>
+                  <input
+                    id={`minchars-${paso.id}`}
+                    type="number"
+                    className="input"
+                    min="0"
+                    value={body.min_chars_duplicado}
+                    onChange={(e) => manejarCambio('min_chars_duplicado', parseInt(e.target.value, 10) || 25)}
+                  />
+                </div>
+
+                <div className="campo">
+                  <label className="campo-label" htmlFor={`consola-${paso.id}`}>
+                    Modo de consola
+                  </label>
+                  <select
+                    id={`consola-${paso.id}`}
+                    className="input"
+                    value={body.consola}
+                    onChange={(e) => manejarCambio('consola', e.target.value)}
+                  >
+                    <option value="silencioso">Silencioso</option>
+                    <option value="resumen">Resumen</option>
+                    <option value="didactico">Didáctico</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {paso.id === 2 && (
+              <>
+                <div className="campo campo-ancho">
+                  <span className="campo-label">Periodo (fecha inicio y fin)</span>
+                  <div className="campos-dos">
+                    <input
+                      type="date"
+                      className="input"
+                      aria-label="Fecha de inicio del periodo"
+                      value={Array.isArray(body.periodo) ? body.periodo[0] : ''}
+                      onChange={(e) => {
+                        const p = Array.isArray(body.periodo) ? [...body.periodo] : [];
+                        p[0] = e.target.value;
+                        manejarCambio('periodo', p);
+                      }}
+                    />
+                    <input
+                      type="date"
+                      className="input"
+                      aria-label="Fecha de fin del periodo"
+                      value={Array.isArray(body.periodo) ? body.periodo[1] : ''}
+                      onChange={(e) => {
+                        const p = Array.isArray(body.periodo) ? [...body.periodo] : [];
+                        p[1] = e.target.value;
+                        manejarCambio('periodo', p);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="campo">
+                  <label className="campo-label" htmlFor="k-topicos">
+                    Número de tópicos (k, LDA)
+                  </label>
+                  <input
+                    id="k-topicos"
+                    type="number"
+                    className="input"
+                    min="1"
+                    value={body.k}
+                    onChange={(e) => manejarCambio('k', parseInt(e.target.value, 10) || 6)}
+                  />
+                </div>
+
+                <div className="campo">
+                  <label className="campo-label" htmlFor="agrupar">
+                    Agrupar documentos
+                  </label>
+                  <select
+                    id="agrupar"
+                    className="input"
+                    value={body.agrupar}
+                    onChange={(e) => manejarCambio('agrupar', e.target.value)}
+                  >
+                    <option value="dia">Día</option>
+                    <option value="mes">Mes</option>
+                  </select>
+                </div>
+
+                <div className="campo-checks campo-ancho">
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.shallow}
+                      onChange={(e) => manejarCambio('shallow', e.target.checked)}
+                    />
+                    Shallow linguistic (udpipe)
+                  </label>
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.libreria}
+                      onChange={(e) => manejarCambio('libreria', e.target.checked)}
+                    />
+                    Sentimientos de librería (syuzhet/NRC)
+                  </label>
+                </div>
+              </>
+            )}
+
+            {paso.id === 3 && (
+              <>
+                <div className="campo">
+                  <label className="campo-label" htmlFor="periodoA">
+                    Periodo A
+                  </label>
+                  <input
+                    id="periodoA"
+                    type="text"
+                    className="input"
+                    value={body.periodoA}
+                    onChange={(e) => manejarCambio('periodoA', e.target.value)}
+                    placeholder="ej: todo_2023 o 2023-01-01,2023-03-31"
+                  />
+                </div>
+
+                <div className="campo">
+                  <label className="campo-label" htmlFor="periodoB">
+                    Periodo B
+                  </label>
+                  <input
+                    id="periodoB"
+                    type="text"
+                    className="input"
+                    value={body.periodoB}
+                    onChange={(e) => manejarCambio('periodoB', e.target.value)}
+                    placeholder="ej: todo_2024 o 2024-01-01,2024-03-31"
+                  />
+                </div>
+
+                <div className="campo-checks campo-ancho">
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.libreria}
+                      onChange={(e) => manejarCambio('libreria', e.target.checked)}
+                    />
+                    Sentimientos de librería (syuzhet/NRC)
+                  </label>
+                </div>
+              </>
+            )}
+
+            {paso.id === 4 && (
+              <>
+                <div className="campo campo-ancho">
+                  <label className="campo-label" htmlFor="oracion">
+                    Oración a analizar
+                  </label>
+                  <textarea
+                    id="oracion"
+                    className="input textarea"
+                    value={body.texto}
+                    onChange={(e) => manejarCambio('texto', e.target.value)}
+                    rows="3"
+                    placeholder="Ej: Hola, no entiendo el laboratorio de INF 111, ayuda por favor"
+                  />
+                </div>
+
+                <div className="campo-checks campo-ancho">
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.usar_udpipe}
+                      onChange={(e) => manejarCambio('usar_udpipe', e.target.checked)}
+                    />
+                    Shallow linguistic (udpipe)
+                  </label>
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.usar_libreria}
+                      onChange={(e) => manejarCambio('usar_libreria', e.target.checked)}
+                    />
+                    Sentimientos de librería (syuzhet/NRC)
+                  </label>
+                  <label className="campo-label checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={body.usar_topicos}
+                      onChange={(e) => manejarCambio('usar_topicos', e.target.checked)}
+                    />
+                    Incluir topic modeling (LDA)
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="form-acciones">
+            <div className="campo campo-guardar">
+              <label className="campo-label" htmlFor={`guardar-${paso.id}`}>
+                Guardar configuración como <span className="campo-opcional">(opcional)</span>
+              </label>
+              <input
+                id={`guardar-${paso.id}`}
+                type="text"
+                className="input"
+                value={nombreCfg}
+                onChange={(e) => setNombreCfg(e.target.value)}
+                placeholder="Nombre de esta configuración"
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-ejecutar"
+              disabled={cargando}
+            >
+              {cargando ? 'Ejecutando…' : `Ejecutar paso ${paso.id}`}
+            </button>
+          </div>
+        </form>
+
+        {res && res.ok && (
+          <div className="resultado-ok">
+            <p className="exito">{res.mensaje || 'Paso completado exitosamente'}</p>
+            {(res.version !== undefined || res.n_mensajes !== undefined) && (
+              <div className="resultado-datos">
+                {res.version !== undefined && (
+                  <span className="dato">
+                    <span className="dato-etiqueta">Versión del dataset</span>
+                    <span className="dato-valor">{res.version}</span>
+                  </span>
+                )}
+                {res.n_mensajes !== undefined && (
+                  <span className="dato">
+                    <span className="dato-etiqueta">Mensajes</span>
+                    <span className="dato-valor">{res.n_mensajes}</span>
+                  </span>
+                )}
+                {res.parametros_usados && (
+                  <div className="resultado-parametros">
+                    <h4 className="resultado-titulo">Parámetros usados</h4>
+                    <pre className="resultado-json">{JSON.stringify(res.parametros_usados, null, 2)}</pre>
+                  </div>
+                )}
+              </div>
+            )}
+            {res.dir_analisis && (
+              <p className="campo-ayuda">Directorio de análisis: {res.dir_analisis}</p>
+            )}
+            {res.interpretacion && (
+              <div className="interpretacion">
+                <strong>Interpretación:</strong> {res.interpretacion}
+              </div>
+            )}
+          </div>
+        )}
+
+        {res && !res.ok && (
+          <div className="estado-error">
+            <p>Error en el paso {paso.id}: {res.mensaje || res.error || 'Desconocido'}</p>
+          </div>
+        )}
+
+        {imgs.length > 0 && (
+          <div className="seccion-archivos">
+            <h3 className="seccion-titulo">Imágenes generadas (PNG)</h3>
+            <div className="grid-imagenes">
+              {imgs.map((img) => (
+                <ImagenPaso key={img.id} img={img} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {csVs.length > 0 && (
+          <div className="seccion-archivos">
+            <h3 className="seccion-titulo">Archivos CSV</h3>
+            <CsvPaso paso={paso.id} csvs={csVs} />
+          </div>
+        )}
+
+        {configuraciones.length > 0 && (
+          <div className="seccion-config">
+            <h3 className="seccion-titulo">Configuraciones guardadas</h3>
+            <ul className="lista-config">
+              {configuraciones.map((c) => (
+                <li key={c.id}>
+                  <strong>{c.nombre}</strong>
+                  <span className="config-parametros">
+                    {c.parametros ? JSON.stringify(c.parametros).slice(0, 100) : ''}
+                  </span>
+                  <span className="config-fecha">
+                    actualizado {new Date(c.actualizado_en).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </li>
   );
 }

@@ -523,12 +523,40 @@ RUTAS_SALIDA <- list(
 
 #* Paso 1 — Ejecutar el preprocesamiento completo (preprocesar())
 #* @post /paso/preprocesar
-function() {
+function(req, res) {
   cat("[Plumber] Paso 1: Iniciando preprocesamiento completo...\n")
   cat("[Plumber] Paso 1: Carpeta del proyecto R:", PROYECTO, "\n")
   cat("[Plumber] Paso 1: Directorio de salida:", file.path(PROYECTO, "salida"), "\n")
   cat("[Plumber] Paso 1: Directorio de configuracion:", file.path(PROYECTO, "config"), "\n")
   cat("[Plumber] Paso 1: Directorio de bitacoras:", file.path(PROYECTO, "bitacoras"), "\n")
+
+  body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+  fecha_inicio <- body$fecha_inicio %||% NULL
+  fecha_fin <- body$fecha_fin %||% NULL
+  responsable <- body$responsable %||% Sys.getenv("RESPONSABLE", "")
+  sentimientos_activos <- body$sentimientos_activos
+  excluir_publicidad <- isTRUE(body$excluir_publicidad %||% TRUE)
+  umbral_publicidad <- as.integer(body$umbral_publicidad %||% 4)
+  anonimizar_autor <- isTRUE(body$anonimizar_autor %||% TRUE)
+  min_chars_duplicado <- as.integer(body$min_chars_duplicado %||% 25)
+  nuevos_emojis <- body$nuevos_emojis %||% c("marcar", "detener")
+  consola <- body$consola %||% "silencioso"
+  csv_para_excel <- isTRUE(body$csv_para_excel %||% FALSE)
+  preguntar_cambios <- isTRUE(body$preguntar_cambios %||% FALSE)
+  motivo_cambios <- body$motivo_cambios %||% NULL
+
+  cat("[Plumber] Paso 1: Parametros -> fecha_inicio:", fecha_inicio %||% "NULL", "\n")
+  cat("[Plumber] Paso 1: Parametros -> fecha_fin:", fecha_fin %||% "NULL", "\n")
+  cat("[Plumber] Paso 1: Parametros -> responsable:", responsable, "\n")
+  cat("[Plumber] Paso 1: Parametros -> excluir_publicidad:", excluir_publicidad, "\n")
+  cat("[Plumber] Paso 1: Parametros -> umbral_publicidad:", umbral_publicidad, "\n")
+  cat("[Plumber] Paso 1: Parametros -> anonimizar_autor:", anonimizar_autor, "\n")
+  cat("[Plumber] Paso 1: Parametros -> min_chars_duplicado:", min_chars_duplicado, "\n")
+  cat("[Plumber] Paso 1: Parametros -> nuevos_emojis:", paste(nuevos_emojis, collapse = ","), "\n")
+  cat("[Plumber] Paso 1: Parametros -> consola:", consola, "\n")
+  cat("[Plumber] Paso 1: Parametros -> csv_para_excel:", csv_para_excel, "\n")
+  cat("[Plumber] Paso 1: Parametros -> preguntar_cambios:", preguntar_cambios, "\n")
+
   df <- cargar_dataset()
 
   entrada_path <- file.path(PROYECTO, "data", "result.json")
@@ -537,12 +565,22 @@ function() {
     {
       preprocesar(
         entrada_path,
+        fecha_inicio = fecha_inicio,
+        fecha_fin = fecha_fin,
+        responsable = responsable,
         dir_salida = file.path(PROYECTO, "salida"),
         dir_config = file.path(PROYECTO, "config"),
         dir_bitacoras = file.path(PROYECTO, "bitacoras"),
-        consola = "silencioso",
-        csv_para_excel = FALSE,
-        preguntar_cambios = FALSE
+        sentimientos_activos = sentimientos_activos,
+        excluir_publicidad = excluir_publicidad,
+        umbral_publicidad = umbral_publicidad,
+        anonimizar_autor = anonimizar_autor,
+        min_chars_duplicado = min_chars_duplicado,
+        nuevos_emojis = nuevos_emojis,
+        consola = consola,
+        csv_para_excel = csv_para_excel,
+        preguntar_cambios = preguntar_cambios,
+        motivo_cambios = motivo_cambios
       )
     },
     error = function(e) {
@@ -582,6 +620,21 @@ function() {
     resumen = res$resumen,
     archivos = archivos,
     archivos_analisis = archivos_png,
+    parametros_usados = list(
+      fecha_inicio = fecha_inicio,
+      fecha_fin = fecha_fin,
+      responsable = responsable,
+      sentimientos_activos = sentimientos_activos,
+      excluir_publicidad = excluir_publicidad,
+      umbral_publicidad = umbral_publicidad,
+      anonimizar_autor = anonimizar_autor,
+      min_chars_duplicado = min_chars_duplicado,
+      nuevos_emojis = nuevos_emojis,
+      consola = consola,
+      csv_para_excel = csv_para_excel,
+      preguntar_cambios = preguntar_cambios,
+      motivo_cambios = motivo_cambios
+    ),
     mensaje = if (identical(res$estado, "ok")) "Preprocesamiento completado exitosamente" else res$mensaje %||% "Error en el preprocesamiento"
   )
 }
@@ -1266,12 +1319,40 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     )
   })
 
-  api_obj$handle("POST", "/paso/preprocesar", function() {
+  api_obj$handle("POST", "/paso/preprocesar", function(req, res) {
     cat("[Plumber] Paso 1: Iniciando preprocesamiento completo...\n")
     cat("[Plumber] Paso 1: Carpeta del proyecto R:", PROYECTO, "\n")
     cat("[Plumber] Paso 1: Directorio de salida:", file.path(PROYECTO, "salida"), "\n")
     cat("[Plumber] Paso 1: Directorio de configuracion:", file.path(PROYECTO, "config"), "\n")
     cat("[Plumber] Paso 1: Directorio de bitacoras:", file.path(PROYECTO, "bitacoras"), "\n")
+
+    body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+    fecha_inicio <- body$fecha_inicio %||% NULL
+    fecha_fin <- body$fecha_fin %||% NULL
+    responsable <- body$responsable %||% Sys.getenv("RESPONSABLE", "")
+    sentimientos_activos <- body$sentimientos_activos
+    excluir_publicidad <- isTRUE(body$excluir_publicidad %||% TRUE)
+    umbral_publicidad <- as.integer(body$umbral_publicidad %||% 4)
+    anonimizar_autor <- isTRUE(body$anonimizar_autor %||% TRUE)
+    min_chars_duplicado <- as.integer(body$min_chars_duplicado %||% 25)
+    nuevos_emojis <- body$nuevos_emojis %||% c("marcar", "detener")
+    consola <- body$consola %||% "silencioso"
+    csv_para_excel <- isTRUE(body$csv_para_excel %||% FALSE)
+    preguntar_cambios <- isTRUE(body$preguntar_cambios %||% FALSE)
+    motivo_cambios <- body$motivo_cambios %||% NULL
+
+    cat("[Plumber] Paso 1: Parametros -> fecha_inicio:", fecha_inicio %||% "NULL", "\n")
+    cat("[Plumber] Paso 1: Parametros -> fecha_fin:", fecha_fin %||% "NULL", "\n")
+    cat("[Plumber] Paso 1: Parametros -> responsable:", responsable, "\n")
+    cat("[Plumber] Paso 1: Parametros -> excluir_publicidad:", excluir_publicidad, "\n")
+    cat("[Plumber] Paso 1: Parametros -> umbral_publicidad:", umbral_publicidad, "\n")
+    cat("[Plumber] Paso 1: Parametros -> anonimizar_autor:", anonimizar_autor, "\n")
+    cat("[Plumber] Paso 1: Parametros -> min_chars_duplicado:", min_chars_duplicado, "\n")
+    cat("[Plumber] Paso 1: Parametros -> nuevos_emojis:", paste(nuevos_emojis, collapse = ","), "\n")
+    cat("[Plumber] Paso 1: Parametros -> consola:", consola, "\n")
+    cat("[Plumber] Paso 1: Parametros -> csv_para_excel:", csv_para_excel, "\n")
+    cat("[Plumber] Paso 1: Parametros -> preguntar_cambios:", preguntar_cambios, "\n")
+
     entrada_path <- file.path(PROYECTO, "data", "result.json")
     cat("[Plumber] Paso 1: Usando entrada directa:", entrada_path, "\n")
 
@@ -1279,12 +1360,22 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
       {
         preprocesar(
           entrada_path,
+          fecha_inicio = fecha_inicio,
+          fecha_fin = fecha_fin,
+          responsable = responsable,
           dir_salida = file.path(PROYECTO, "salida"),
           dir_config = file.path(PROYECTO, "config"),
           dir_bitacoras = file.path(PROYECTO, "bitacoras"),
-          consola = "silencioso",
-          csv_para_excel = FALSE,
-          preguntar_cambios = FALSE
+          sentimientos_activos = sentimientos_activos,
+          excluir_publicidad = excluir_publicidad,
+          umbral_publicidad = umbral_publicidad,
+          anonimizar_autor = anonimizar_autor,
+          min_chars_duplicado = min_chars_duplicado,
+          nuevos_emojis = nuevos_emojis,
+          consola = consola,
+          csv_para_excel = csv_para_excel,
+          preguntar_cambios = preguntar_cambios,
+          motivo_cambios = motivo_cambios
         )
       },
       error = function(e) {
@@ -1323,6 +1414,21 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
       resumen = res$resumen,
       archivos = archivos,
       archivos_analisis = archivos_png,
+      parametros_usados = list(
+        fecha_inicio = fecha_inicio,
+        fecha_fin = fecha_fin,
+        responsable = responsable,
+        sentimientos_activos = sentimientos_activos,
+        excluir_publicidad = excluir_publicidad,
+        umbral_publicidad = umbral_publicidad,
+        anonimizar_autor = anonimizar_autor,
+        min_chars_duplicado = min_chars_duplicado,
+        nuevos_emojis = nuevos_emojis,
+        consola = consola,
+        csv_para_excel = csv_para_excel,
+        preguntar_cambios = preguntar_cambios,
+        motivo_cambios = motivo_cambios
+      ),
       mensaje = if (identical(res$estado, "ok")) "Preprocesamiento completado exitosamente" else res$mensaje %||% "Error en el preprocesamiento"
     )
   })
