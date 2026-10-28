@@ -1,19 +1,37 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import dashboardRoutes from './routes/dashboard.js';
 import bitacoraRoutes from './routes/bitacora.js';
 import eventsRoutes from './routes/events.js';
+import configuracionesRoutes from './routes/configuraciones.js';
+import pasosRoutes from './routes/pasos.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
+// Servir archivos estaticos de r/salida (imagenes PNG generadas por R/Plumber)
+app.use('/salida', express.static(path.join(__dirname, '..', 'r', 'salida')));
+
+// Servir las imagenes del dashboard que viven en client/src/views/salida
+app.use(
+  '/salida-cliente',
+  express.static(path.join(__dirname, '..', 'client', 'src', 'views', 'salida'))
+);
+
 // API
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/bitacora', bitacoraRoutes);
 app.use('/api/events', eventsRoutes);
+app.use('/api/configuraciones', configuracionesRoutes);
+app.use('/api/pasos', pasosRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

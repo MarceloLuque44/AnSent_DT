@@ -22,7 +22,7 @@
 preprocesar <- function(ruta_archivo,
                         fecha_inicio = NULL, fecha_fin = NULL,
                         responsable = Sys.getenv("RESPONSABLE", ""),
-                        dir_config = "config", dir_salida = "salida",
+                        dir_config = "config", dir_salida = file.path("client", "src", "views", "salida"),
                         dir_bitacoras = "bitacoras",
                         sentimientos_activos = NULL,
                         excluir_publicidad = TRUE, umbral_publicidad = 4,

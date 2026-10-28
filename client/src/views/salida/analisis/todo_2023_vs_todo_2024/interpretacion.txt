@@ -1,0 +1,4 @@
+En todo_2023 predominan gratitud (2.3%), alegria (2.2%), tristeza (1%); el menos presente es ironia (0.1%).
+En todo_2024 predominan gratitud (2.5%), alegria (2%), tristeza (0.8%); el menos presente es ironia (0.1%).
+De todo_2023 a todo_2024, el mayor aumento es gratitud (+0.1 puntos) y el mayor descenso es satisfaccion_tranquilidad (-0.3 puntos).
+Lectura descriptiva: diferencias pequeñas pueden deberse al azar o a que un periodo tiene menos mensajes; revisa n_mensajes.

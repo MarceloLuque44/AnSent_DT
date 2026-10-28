@@ -1,14 +1,18 @@
 /**
- * Router simple basado en hash: #/dashboard | #/bitacora
+ * Router simple basado en hash: #/dashboard | #/pasos | #/bitacora
  */
 import { useEffect, useState } from 'react';
 import Dashboard from './views/Dashboard.jsx';
 import Bitacora from './views/Bitacora.jsx';
+import Pasos from './views/Pasos.jsx';
+import Salida from './views/Salida.jsx';
 import LiveBadge from './LiveBadge.jsx';
 
 const VISTAS = {
   dashboard: Dashboard,
+  pasos: Pasos,
   bitacora: Bitacora,
+  salida: Salida,
 };
 
 function obtenerRutaActual() {
@@ -35,8 +39,14 @@ export default function App() {
           <a href="#/dashboard" className={ruta === 'dashboard' ? 'activo' : ''}>
             Dashboard
           </a>
+          <a href="#/pasos" className={ruta === 'pasos' ? 'activo' : ''}>
+            Pasos (API R)
+          </a>
           <a href="#/bitacora" className={ruta === 'bitacora' ? 'activo' : ''}>
             Bitácora
+          </a>
+          <a href="#/salida" className={ruta === 'salida' ? 'activo' : ''}>
+            Salida
           </a>
         </nav>
         <LiveBadge />

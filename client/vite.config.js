@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       // Reenvia /api al servidor Express durante desarrollo
       '/api': 'http://localhost:3000',
+      // Reenvia las imagenes del dashboard al servidor Express
+      '/salida-cliente': 'http://localhost:3000',
     },
   },
 });
