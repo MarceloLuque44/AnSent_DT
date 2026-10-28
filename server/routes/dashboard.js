@@ -90,6 +90,47 @@ router.get('/carpetas-imagenes', (_req, res) => {
   res.json({ carpetas: escanearCarpetas() });
 });
 
+/** Eliminar una carpeta completa de imagenes del dashboard */
+router.delete('/carpetas/:nombre', (req, res) => {
+  const { nombre } = req.params;
+  if (!nombre || nombre.includes('..') || path.isAbsolute(nombre)) {
+    return res.status(400).json({ error: 'Nombre de carpeta invalido' });
+  }
+  const carpetaPath = path.join(ANALISIS_DIR, nombre);
+  if (!fs.existsSync(carpetaPath) || !fs.statSync(carpetaPath).isDirectory()) {
+    return res.status(404).json({ error: 'Carpeta no encontrada' });
+  }
+  try {
+    fs.rmSync(carpetaPath, { recursive: true, force: true });
+    sseHub.publish('dashboard-imagenes', {});
+    res.json({ ok: true, mensaje: `Carpeta '${nombre}' eliminada` });
+  } catch (err) {
+    console.error('[Dashboard] Error eliminando carpeta:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** Eliminar una imagen individual de una carpeta del dashboard */
+router.delete('/carpetas/:nombre/imagenes/:archivo', (req, res) => {
+  const { nombre, archivo } = req.params;
+  if (!nombre || !archivo || nombre.includes('..') || archivo.includes('..') ||
+      path.isAbsolute(nombre) || path.isAbsolute(archivo)) {
+    return res.status(400).json({ error: 'Ruta invalida' });
+  }
+  const archivoPath = path.join(ANALISIS_DIR, nombre, archivo);
+  if (!fs.existsSync(archivoPath) || fs.statSync(archivoPath).isDirectory()) {
+    return res.status(404).json({ error: 'Imagen no encontrada' });
+  }
+  try {
+    fs.unlinkSync(archivoPath);
+    sseHub.publish('dashboard-imagenes', {});
+    res.json({ ok: true, mensaje: `Imagen '${archivo}' eliminada` });
+  } catch (err) {
+    console.error('[Dashboard] Error eliminando imagen:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /** Estado general del pipeline R y Express */
 router.get('/status', async (_req, res) => {
   res.json({

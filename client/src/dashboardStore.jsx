@@ -91,6 +91,51 @@ export function DashboardProvider({ children }) {
     });
   }, []);
 
+  /** Elimina una carpeta completa de imagenes del dashboard */
+  const eliminarCarpeta = useCallback(async (nombre) => {
+    try {
+      const res = await fetch(`/api/dashboard/carpetas/${encodeURIComponent(nombre)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Error ${res.status}`);
+      }
+      await cargarCarpetas();
+      setCarpetasActivas((prev) => {
+        const siguiente = new Set(prev);
+        siguiente.delete(nombre);
+        return siguiente;
+      });
+      setGraficosOcultos((prev) => {
+        const siguiente = { ...prev };
+        delete siguiente[nombre];
+        return siguiente;
+      });
+    } catch (err) {
+      console.error('[Dashboard] Error eliminando carpeta:', err.message);
+      throw err;
+    }
+  }, [cargarCarpetas]);
+
+  /** Elimina una imagen individual de una carpeta del dashboard */
+  const eliminarGrafico = useCallback(async (carpeta, nombre) => {
+    try {
+      const res = await fetch(
+        `/api/dashboard/carpetas/${encodeURIComponent(carpeta)}/imagenes/${encodeURIComponent(nombre)}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Error ${res.status}`);
+      }
+      await cargarCarpetas();
+    } catch (err) {
+      console.error('[Dashboard] Error eliminando imagen:', err.message);
+      throw err;
+    }
+  }, [cargarCarpetas]);
+
   const valor = {
     carpetas,
     carpetasActivas,
@@ -98,6 +143,8 @@ export function DashboardProvider({ children }) {
     cargarCarpetas,
     toggleCarpeta,
     alternarGrafico,
+    eliminarCarpeta,
+    eliminarGrafico,
   };
 
   return (

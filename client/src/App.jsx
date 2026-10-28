@@ -42,7 +42,7 @@ function Shell() {
   const [ruta, setRuta] = useState(obtenerRutaActual);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [carpetasAbiertas, setCarpetasAbiertas] = useState(() => new Set());
-  const { carpetas, carpetasActivas, graficosOcultos, toggleCarpeta, alternarGrafico } =
+  const { carpetas, carpetasActivas, graficosOcultos, toggleCarpeta, alternarGrafico, eliminarCarpeta, eliminarGrafico } =
     useDashboard();
 
   useEffect(() => {
@@ -169,6 +169,21 @@ function Shell() {
                                 <span className="toggle-nudo" />
                               </span>
                             </label>
+
+                            <button
+                              type="button"
+                              className="nav-eliminar-carpeta"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`¿Eliminar la carpeta '${nombre}' y todos sus gráficos?`)) {
+                                  eliminarCarpeta(nombre).catch(() => {});
+                                }
+                              }}
+                              aria-label={`Eliminar carpeta ${nombre}`}
+                              title="Eliminar carpeta"
+                            >
+                              🗑️
+                            </button>
                           </div>
 
                           {abierta && (
@@ -191,6 +206,20 @@ function Shell() {
                                     }
                                   />
                                   <span>{img.nombre}</span>
+                                  <button
+                                    type="button"
+                                    className="nav-eliminar-grafico"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(`¿Eliminar el gráfico '${img.nombre}'?`)) {
+                                        eliminarGrafico(nombre, img.nombre).catch(() => {});
+                                      }
+                                    }}
+                                    aria-label={`Eliminar ${img.nombre}`}
+                                    title="Eliminar gráfico"
+                                  >
+                                    🗑️
+                                  </button>
                                 </label>
                               ))}
                               {lista.length === 0 && (
