@@ -6,6 +6,7 @@ import Dashboard from './views/Dashboard.jsx';
 import Bitacora from './views/Bitacora.jsx';
 import Pasos from './views/Pasos.jsx';
 import Salida from './views/Salida.jsx';
+import Bitacoras from './views/Bitacoras.jsx';
 import LiveBadge from './LiveBadge.jsx';
 
 const VISTAS = {
@@ -13,6 +14,7 @@ const VISTAS = {
   pasos: Pasos,
   bitacora: Bitacora,
   salida: Salida,
+  bitacoras: Bitacoras,
 };
 
 function obtenerRutaActual() {
@@ -47,6 +49,9 @@ export default function App() {
           </a>
           <a href="#/salida" className={ruta === 'salida' ? 'activo' : ''}>
             Salida
+          </a>
+          <a href="#/bitacoras" className={ruta === 'bitacoras' ? 'activo' : ''}>
+            Bitácoras (R)
           </a>
         </nav>
         <LiveBadge />

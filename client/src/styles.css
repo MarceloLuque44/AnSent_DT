@@ -1014,6 +1014,11 @@ select:focus {
   font-size: 0.75rem;
 }
 
+/* Selector de hojas de xlsx en bitacoras */
+.bitacora-hojas {
+  margin: 0.25rem 0 0.4rem;
+}
+
 /* Arbol JSON (resumen.json) */
 .json-nodo-raiz,
 .json-nodo-bloque {

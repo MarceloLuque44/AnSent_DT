@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { rGet } from '../api.js';
+import JSONNodo from '../components/JSONNodo.jsx';
 const iconosPorTipo = {
   csv: '📄',
   json: '🧾',
@@ -54,43 +55,6 @@ const EXTREMOS_SALIDA = {
 /** Archivos que se muestran con paginacion (muchas filas). */
 const esPaginado = (nombre) =>
   /^(mensajes_incluidos|mensajes_excluidos)$/.test(EXTREMOS_SALIDA[aTexto(nombre)] ?? '');
-
-/**
- * Nodo del arbol JSON: muestra "clave: valor" recursivamente.
- * - Objeto/array: la clave como titulo y los hijos indentados con regla vertical.
- * - Valor escalar: "<clave>: <valor>" en una linea.
- */
-function JSONNodo({ clave, valor, nivel = 0 }) {
-  if (valor && typeof valor === 'object' && (Array.isArray(valor) || Object.keys(valor).length > 0)) {
-    const esArr = Array.isArray(valor);
-    const entradas = esArr ? valor.map((v, i) => [String(i), v]) : Object.entries(valor);
-    return (
-      <div className={nivel > 0 ? 'json-nodo-bloque' : 'json-nodo-raiz'}>
-        {clave && (
-          <p className="json-nodo-clave">
-            {clave}
-            <em className="json-nodo-clase">
-              {' '}
-              ({esArr ? `${entradas.length} elemento(s)` : `${entradas.length} clave(s)`})
-            </em>
-          </p>
-        )}
-        <div className="json-nodo-hijos">
-          {entradas.map(([k, v]) => (
-            <JSONNodo key={k} clave={k} valor={v} nivel={nivel + 1} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-  const txt = valor == null ? '—' : typeof valor === 'number' ? valor.toLocaleString('es-ES') : String(valor);
-  return (
-    <div className="json-nodo-fila">
-      <span className="json-nodo-clave-min">{clave}</span>
-      <span className="json-nodo-valor">{txt}</span>
-    </div>
-  );
-}
 
 /**
  * Pantalla "Salida": lista los archivos generados directamente en r/salida/

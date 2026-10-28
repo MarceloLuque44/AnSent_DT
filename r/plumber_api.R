@@ -989,8 +989,159 @@ function() {
 }
 
 # ------------------------------------------------------------------------------
-# 8. Configuración y arranque del servidor
+# 8b. Endpoints para las bitacoras en r/bitacoras/ (xlsx -> JSON paginado)
 # ------------------------------------------------------------------------------
+
+BITACORAS_DIR <- file.path(PROYECTO, "bitacoras")
+
+# Helper: listar los archivos de r/bitacoras/ (con sus hojas si es xlsx)
+.listar_bitacoras <- function() {
+  if (!dir.exists(BITACORAS_DIR)) {
+    return(list())
+  }
+  archivos <- list()
+  for (f in list.files(BITACORAS_DIR, full.names = TRUE, recursive = FALSE)) {
+    if (file.exists(f) && !file.info(f)$isdir) {
+      ext <- tolower(tools::file_ext(f))
+      hojas <- NULL
+      if (ext == "xlsx") {
+        hojas <- tryCatch(readxl::excel_sheets(f), error = function(e) NULL)
+      }
+      archivos[[length(archivos) + 1]] <- list(
+        nombre = basename(f),
+        ruta = .ruta_frontend(f),
+        ruta_api = paste0("/bitacoras/", tools::file_path_sans_ext(basename(f))),
+        tipo = ext,
+        tamano_bytes = as.integer(file.info(f)$size),
+        modificado = format(file.info(f)$mtime, format = "%Y-%m-%d %H:%M:%S"),
+        hojas = hojas
+      )
+    }
+  }
+  archivos
+}
+
+# Helper: leer un archivo de bitacora (xlsx o json) y devolver filas paginadas
+.leer_bitacora_ruta <- function(cfg, hoja = NULL, pagina = 1, tam_pagina = 50) {
+  if (is.null(cfg$archivo) || !nzchar(cfg$archivo)) {
+    stop("Se requiere un archivo de bitacora valido")
+  }
+  ruta <- normalizePath(file.path(BITACORAS_DIR, cfg$archivo), winslash = "/", mustWork = FALSE)
+  base <- normalizePath(BITACORAS_DIR, winslash = "/")
+  # Seguridad: el archivo debe estar dentro de r/bitacoras/
+  if (!startsWith(paste0(ruta, "/"), paste0(base, "/"))) {
+    stop("Archivo fuera de la carpeta de bitacoras")
+  }
+  if (!file.exists(ruta) || file.info(ruta)$isdir) {
+    stop("Archivo de bitacora no encontrado: ", cfg$archivo)
+  }
+
+  # Utilidad compartida para convertir un entero de query a entero seguro
+  aEntero <- function(v, def) {
+    r <- suppressWarnings(as.integer(v[1]))
+    if (length(r) != 1 || is.na(r)) def else r
+  }
+  pagina <- min(max(1L, aEntero(pagina, 1L)), 1000000L)
+  tam_pagina <- min(max(1L, aEntero(tam_pagina, 50L)), MAX_FILAS_CONTENIDO)
+
+  respuesta_base <- function(df, hoja_usada = NULL) {
+    columnas <- names(df)
+    n_total <- nrow(df)
+    total_paginas <- if (n_total == 0) 1L else ceiling(n_total / tam_pagina)
+    pagina <- min(pagina, total_paginas)
+    desde <- (pagina - 1) * tam_pagina
+    hasta <- min(desde + tam_pagina - 1L, n_total)
+    idx_filas <- if (n_total == 0) integer(0) else seq(desde + 1L, hasta + 1L)
+    filas <- lapply(idx_filas, function(i) {
+      f <- as.list(df[i, ])
+      names(f) <- columnas
+      lapply(f, function(v) {
+        if (length(v) == 0 || (length(v) == 1 && is.na(v))) {
+          return(NULL)
+        }
+        if (nrow(v) > 0 && !is.null(dim(v))) {
+          list(n_filas = nrow(v), filas = lapply(seq_len(nrow(v)), as.list))
+        } else if (length(v) > 1) {
+          as.list(v)
+        } else {
+          unname(v)
+        }
+      })
+    })
+    list(
+      ok = TRUE,
+      archivo = cfg$archivo,
+      tipo = cfg$tipo,
+      hoja = hoja_usada,
+      columnas = columnas,
+      n_columnas = length(columnas),
+      n_filas = n_total,
+      filas_devueltas = length(filas),
+      truncado = length(filas) < n_total,
+      pagina = pagina,
+      tam_pagina = tam_pagina,
+      total_paginas = total_paginas,
+      filas = filas
+    )
+  }
+
+  if (identical(cfg$tipo, "json")) {
+    obj <- jsonlite::fromJSON(ruta, simplifyDataFrame = FALSE)
+    res <- respuesta_base(data.frame(clave = "contenido", valor = "", stringsAsFactors = FALSE))
+    res$filas <- list(
+      list(clave = NULL, valor = obj)
+    )
+    res$columnas_tocadas <- NULL
+    res$mensaje <- "Contenido JSON de la bitacora leido correctamente"
+    return(res)
+  }
+
+  # XLSX: elegir hoja
+  hojas <- tryCatch(readxl::excel_sheets(ruta), error = function(e) NULL)
+  hoja_sel <- if (!is.null(hoja) && !is.na(hoja) && !is.null(hojas) &&
+                   hoja %in% hojas) hoja else (hojas[[1]] %||% NULL)
+  if (is.null(hoja_sel)) stop("El xlsx no tiene hojas legibles: ", cfg$archivo)
+  df <- readxl::read_xlsx(ruta, sheet = hoja_sel, col_types = "text")
+  res <- respuesta_base(as.data.frame(df), hoja_sel)
+  res$mensaje <- "Contenido de la bitacora leido correctamente"
+  res
+}
+
+# Rutas fijas generadas a partir de los archivos existentes en r/bitacoras/
+RUTAS_BITACORAS <- lapply(.listar_bitacoras(), function(b) {
+  list(
+    ruta = tools::file_path_sans_ext(b$nombre),
+    archivo = b$nombre,
+    tipo = b$tipo,
+    hojas = b$hojas
+  )
+})
+
+# Helper: respuesta JSON con paginacion para una ruta de bitacora
+.respuesta_ruta_bitacora <- function(cfg, req) {
+  qp <- .parse_qs(req$QUERY_STRING %||% "")
+  hoja <- qp[["hoja"]] %||% NULL
+  pagina <- qp[["pagina"]] %||% 1
+  por_pagina <- qp[["por_pagina"]] %||% 50
+  cat("[Plumber] /bitacoras/", cfg$ruta, "| hoja:", hoja %||% "(default)",
+      "| pagina:", pagina, "| por_pagina:", por_pagina, "\n")
+  .leer_bitacora_ruta(cfg, hoja = hoja, pagina = pagina, tam_pagina = por_pagina)
+}
+
+# Helper: construir el handler de la ruta fija de bitacora
+.hend_bitacora_ruta <- function(cfg) {
+  force(cfg)
+  function(req, res) {
+    tryCatch(
+      .respuesta_ruta_bitacora(cfg, req),
+      error = function(e) {
+        cat("[Plumber] ERROR en /bitacoras/", cfg$ruta, ":", conditionMessage(e), "\n")
+        res$status <- 400
+        .respuesta_contenido_error(e)
+      }
+    )
+  }
+}
 cat("[Plumber] API definida. Puerto: 8765\n")
 cat("[Plumber] Endpoints:\n")
 cat("  GET  http://localhost:8765/__ping__        - salud\n")
@@ -1005,6 +1156,8 @@ cat("  GET  http://localhost:8765/salida/archivos/contenido?archivo=x.csv - Cont
 cat("  GET  http://localhost:8765/salida/<archivo>?pagina=&por_pagina=    - Endpoint fijo por archivo:\n")
 cat("       /salida/emojis_en_uso  /salida/emojis_pendientes  /salida/mensajes_incluidos\n")
 cat("       /salida/mensajes_excluidos  /salida/stopwords_aplicadas  /salida/tokens  /salida/resumen\n")
+cat("  GET  http://localhost:8765/bitacoras - Archivos de r/bitacoras (JSON)\n")
+cat("  GET  http://localhost:8765/bitacoras/<archivo>?hoja=&pagina=&por_pagina= - Contenido paginado (xlsx/json)\n")
 cat("  GET  http://localhost:8765/dashboard/graficos - Imagenes agrupadas por carpeta (dashboard)\n")
 cat("  GET  http://localhost:8765/archivos/*  - Servir archivos estaticos (imagenes)\n")
 
@@ -1483,6 +1636,42 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     cat("[Plumber] Registrando GET ", ruta, " -> ", cfg$archivo, "\n", sep = "")
     api_obj$handle(
       "GET", ruta, .hend_salida_ruta(cfg),
+      serializer = plumber::serializer_unboxed_json()
+    )
+  })
+
+  # Listar los archivos de r/bitacoras/ (con hojas de xlsx) en JSON
+  api_obj$handle("GET", "/bitacoras", function() {
+    cat("[Plumber] /bitacoras: Listando archivos de", BITACORAS_DIR, "...\n")
+    tryCatch(
+      {
+        archivos <- .listar_bitacoras()
+        list(
+          ok = TRUE,
+          carpeta = .ruta_frontend(BITACORAS_DIR),
+          archivos = archivos,
+          total = length(archivos),
+          mensaje = "Archivos de bitacoras listados"
+        )
+      },
+      error = function(e) {
+        cat("[Plumber] ERROR en /bitacoras:", conditionMessage(e), "\n")
+        list(
+          ok = FALSE,
+          archivos = list(),
+          total = 0,
+          mensaje = paste("Error listando bitacoras:", conditionMessage(e))
+        )
+      }
+    )
+  }, serializer = plumber::serializer_unboxed_json())
+
+  # Endpoints fijos por archivo de r/bitacoras/ (xlsx/json -> JSON paginado)
+  lapply(RUTAS_BITACORAS, function(cfg) {
+    ruta <- paste0("/bitacoras/", cfg$ruta)
+    cat("[Plumber] Registrando GET ", ruta, " -> ", cfg$archivo, "\n", sep = "")
+    api_obj$handle(
+      "GET", ruta, .hend_bitacora_ruta(cfg),
       serializer = plumber::serializer_unboxed_json()
     )
   })
