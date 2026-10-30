@@ -1032,6 +1032,22 @@ function(req, res) {
       }
       obj$sentimientos <- unname(porNombre)
       jsonlite::writeJSON(obj, ruta, pretty = TRUE, auto_unbox = TRUE, na = "null")
+
+      # Cargar toda la configuración con los nuevos valores activo para que
+      # los procesos de gráficos y análisis los usen sin need de preprocesar.
+      cfg <- tryCatch(
+        cargar_config(file.path(PROYECTO, "config"), NULL),
+        error = function(e) {
+          cat("[Plumber] AVISO: no se pudo cargar configuracion completa:", conditionMessage(e), "\n")
+          NULL
+        }
+      )
+      if (!is.null(cfg)) {
+        assign("config_sentimientos_cargada", cfg, envir = globalenv())
+        cat("[Plumber] Configuracion cargada en memoria (sentimientos activos: ",
+            sum(cfg$sent$activo), " de ", nrow(cfg$sent), ")\n", sep = "")
+      }
+
       res$setHeader("Content-Type", "application/json")
       jsonlite::toJSON(list(ok = TRUE, archivo = "sentimientos.json", actualizados = length(sentimientos)), auto_unbox = TRUE)
     },
@@ -1914,6 +1930,22 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
         }
         obj$sentimientos <- unname(porNombre)
         jsonlite::writeJSON(obj, ruta, pretty = TRUE, auto_unbox = TRUE, na = "null")
+
+        # Cargar toda la configuración con los nuevos valores activo para que
+        # los procesos de gráficos y análisis los usen sin need de preprocesar.
+        cfg <- tryCatch(
+          cargar_config(file.path(PROYECTO, "config"), NULL),
+          error = function(e) {
+            cat("[Plumber] AVISO: no se pudo cargar configuracion completa:", conditionMessage(e), "\n")
+            NULL
+          }
+        )
+        if (!is.null(cfg)) {
+          assign("config_sentimientos_cargada", cfg, envir = globalenv())
+          cat("[Plumber] Configuracion cargada en memoria (sentimientos activos: ",
+              sum(cfg$sent$activo), " de ", nrow(cfg$sent), ")\n", sep = "")
+        }
+
         res$setHeader("Content-Type", "application/json")
         jsonlite::toJSON(list(ok = TRUE, archivo = "sentimientos.json", actualizados = length(sentimientos)), auto_unbox = TRUE)
       },

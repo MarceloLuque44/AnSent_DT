@@ -45,7 +45,13 @@ patron_sentimiento <- function(palabras, raices, negado = FALSE) {
 
 calcular_sentimientos <- function(ctx, d) {
   M <- "11. Sentimientos con diccionario propio"
-  sj <- ctx$cfg$sent[ctx$cfg$sent$activo, ]
+  cfg_sent <- if (exists("config_sentimientos_cargada", envir = globalenv()) &&
+                   !is.null(get("config_sentimientos_cargada", envir = globalenv()))) {
+    get("config_sentimientos_cargada", envir = globalenv())$sent
+  } else {
+    ctx$cfg$sent
+  }
+  sj <- cfg_sent[cfg_sent$activo, ]
   dic_emo <- ctx$cfg$emojis
   nombres <- sj$nombre
   
