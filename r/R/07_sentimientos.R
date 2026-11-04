@@ -66,6 +66,7 @@ calcular_sentimientos <- function(ctx, d) {
                       # ▌CÓDIGO
                       codigo = {
                         txt <- .ascii(datos$texto_limpio)        # coincidencia sobre texto sin tildes
+                        txt[is.na(txt)] <- ""                    # NA no debe propagarse a los conteos
                         n <- nrow(datos)
                         emo_lst <- strsplit(datos$emojis_lista, " ", fixed = TRUE)
                         sent_emo <- stats::setNames(dic_emo$sentimiento, dic_emo$emoji)
@@ -87,6 +88,8 @@ calcular_sentimientos <- function(ctx, d) {
                           datos[[paste0("sent_", nombres[i])]] <- hits[, i]
                           datos[[paste0("pct_", nombres[i])]] <- round(pmin(100, 100 * hits[, i] / unidades), 2)
                         }
+                        hits[is.na(hits)] <- 0
+                        negs[is.na(negs)] <- 0
                         datos$hits_total <- rowSums(hits)
                         datos$n_negados <- rowSums(negs)
                         base_pol <- datos$hits_total + datos$n_negados

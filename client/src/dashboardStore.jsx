@@ -23,7 +23,7 @@ export function DashboardProvider({ children }) {
     try {
       const { carpetas: lista } = await apiGet('/api/dashboard/carpetas-imagenes');
       if (!Array.isArray(lista)) return;
-      setCarpetas((prev) => {
+      setCarpetas(() => {
         const siguiente = {};
         for (const c of lista) {
           siguiente[c.carpeta] = c.imagenes.map((nombre) => ({
@@ -31,11 +31,8 @@ export function DashboardProvider({ children }) {
             ruta: urlImagen(c.carpeta, nombre),
           }));
         }
-        // Conservar carpetas cargadas anteriormente que ya no existen,
-        // para que las columnas activas no desaparezcan de golpe.
-        for (const nombre of Object.keys(prev)) {
-          if (!(nombre in siguiente)) siguiente[nombre] = prev[nombre];
-        }
+        // Se reemplaza la lista completa: si una carpeta se elimino en disco,
+        // debe desaparecer tambien del menu y del lienzo.
         return siguiente;
       });
       // Quitar del estado activo las carpetas que ya no existen

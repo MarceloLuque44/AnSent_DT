@@ -37,8 +37,12 @@ app.use('/api/sentimientos', sentimientosRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log(`[Express] Servidor en http://localhost:${config.port}`);
   console.log(`[Express] Plumber configurado en ${config.plumberUrl}`);
   console.log(`[Express] Para iniciar Plumber:  Rscript r/plumber_api.R`);
 });
+
+// Los pasos 2 y 3 (LDA + udpipe + syuzhet + gráficos) pueden superar el
+// requestTimeout por defecto de Node (5 min) y cortar la conexión.
+server.requestTimeout = 900000;

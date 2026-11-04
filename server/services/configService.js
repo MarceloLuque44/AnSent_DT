@@ -88,11 +88,16 @@ export async function ejecutarPaso(paso, body = {}) {
     default: throw new Error(`Paso invalido: ${paso}`);
   }
 
+  // El paso 1 recorre todo el chat y los pasos 2/3 entrenan LDA, corren udpipe
+  // y syuzhet y generan ~25 gráficos: pueden tardar varios minutos. Con 120 s
+  // el proxy cortaba la peticion y el navegador mostraba ECONNRESET/“se queda
+  // cargando” aunque R siguiera trabajando.
+  const timeoutMs = paso <= 3 ? 900000 : 300000;
   const resultado = await rService.rFetchRaw(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }, 120000);
+  }, timeoutMs);
 
   if (resultado === null) {
     throw new Error('Plumber no disponible. Inicia Rscript r/plumber_api.R');
@@ -131,7 +136,7 @@ export async function ejecutarPreprocesamiento(body = {}) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    }, 120000);
+    }, 900000);
   } catch (err) {
     console.error('[configService] Error en ejecutarPreprocesamiento:', err.message);
     return null;
