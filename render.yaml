@@ -21,3 +21,6 @@ services:
         sync: false
       - key: CORS_ORIGINS
         value: https://ansent.onrender.com
+      # Opcional: dejar vacío si el frontend se sirve desde el mismo Render.
+      - key: VITE_API_URL
+        sync: false

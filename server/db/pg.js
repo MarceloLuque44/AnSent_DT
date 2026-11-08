@@ -10,9 +10,25 @@ const ssl = config.dbSsl
     }
   : false;
 
+/**
+ * Supabase suele devolver la URL con ?sslmode=require. pg interpreta ese
+ * parámetro y termina rechazando el certificado del pooler. Quitamos
+ * sslmode para que mande la configuración SSL explícita de arriba.
+ */
+function normalizarConnectionString(raw) {
+  if (!raw) return raw;
+  try {
+    const url = new URL(raw);
+    url.searchParams.delete('sslmode');
+    return url.toString();
+  } catch {
+    return raw.replace(/([?&])sslmode=[^&]*&?/i, '$1').replace(/[?&]$/, '');
+  }
+}
+
 export const pool = config.databaseUrl
   ? new Pool({
-      connectionString: config.databaseUrl,
+      connectionString: normalizarConnectionString(config.databaseUrl),
       ssl,
       max: config.dbPoolMax,
       idleTimeoutMillis: 30000,
