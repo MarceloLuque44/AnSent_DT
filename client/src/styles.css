@@ -2200,3 +2200,37 @@ select:focus {
   max-width: 280px;
   vertical-align: top;
 }
+
+/* ---------------- Dashboard: gráficos con ECharts ---------------- */
+.panel-grafico {
+  background: var(--panel);
+  border: 1px solid var(--panel-borde);
+  border-radius: var(--radio);
+  padding: 1.1rem 1.2rem;
+  box-shadow: var(--sombra-1);
+}
+
+.selector-periodo {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.selector-periodo select {
+  min-width: 220px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--panel-borde);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--texto);
+  font: inherit;
+  font-weight: 500;
+}
+
+.selector-periodo select:focus-visible {
+  outline: 2px solid var(--azul-medio);
+  outline-offset: 1px;
+}

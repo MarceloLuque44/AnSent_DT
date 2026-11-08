@@ -5,20 +5,23 @@
 import { useEffect, useState } from 'react';
 import Cambios from './views/Cambios.jsx';
 import Bitacoras from './views/Bitacoras.jsx';
+import Dashboard from './views/Dashboard.jsx';
 
 const VISTAS = {
+  dashboard: Dashboard,
   cambios: Cambios,
   bitacoras: Bitacoras,
 };
 
 const NAVEGACION = [
+  { id: 'dashboard', etiqueta: 'Dashboard', descripcion: 'Gráficos del análisis' },
   { id: 'cambios', etiqueta: 'Cambios', descripcion: 'Registros desde R' },
   { id: 'bitacoras', etiqueta: 'Bitácora', descripcion: 'Historial de cambios' },
 ];
 
 function obtenerRutaActual() {
-  const hash = window.location.hash.replace(/^#\/?/, '') || 'cambios';
-  return VISTAS[hash] ? hash : 'cambios';
+  const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
+  return VISTAS[hash] ? hash : 'dashboard';
 }
 
 export default function App() {

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import cambiosRoutes from './routes/cambios.js';
+import analisisRoutes from './routes/analisis.js';
 import { query } from './db/pg.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/cambios', cambiosRoutes);
+app.use('/api/dashboard', analisisRoutes);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Endpoint no encontrado' });

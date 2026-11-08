@@ -1,7 +1,6 @@
 import { Router } from 'express';
-import crypto from 'node:crypto';
-import { config } from '../config.js';
 import { query } from '../db/pg.js';
+import { requireApiKey } from '../middlewares/apiKey.js';
 
 const router = Router();
 
@@ -13,20 +12,6 @@ const COLS = `
   cambio_realizado, justificacion, resultado, ejecucion_prueba,
   responsable, estado_registro
 `;
-
-function requireApiKey(req, res, next) {
-  if (!config.apiKey) {
-    return res.status(503).json({ error: 'R_API_KEY no configurada en el servidor' });
-  }
-  const enviada = req.get('x-api-key') || '';
-  const esperada = config.apiKey;
-  const a = Buffer.from(enviada);
-  const b = Buffer.from(esperada);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return res.status(401).json({ error: 'API key inválida' });
-  }
-  next();
-}
 
 /** GET /api/cambios?limit=100&offset=0&tipo=&estado=&archivo=&responsable=&q= */
 router.get('/', async (req, res, next) => {
