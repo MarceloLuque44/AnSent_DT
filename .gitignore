@@ -7,3 +7,8 @@ node_modules
 .kilo
 .agents
 .zencoder
+
+# Variables de entorno y builds
+.env
+.env.local
+client/dist

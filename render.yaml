@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ansent
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm ci --prefix client && npm run build --prefix client
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: DB_SSL_REJECT_UNAUTHORIZED
+        value: "false"
+      - key: DB_POOL_MAX
+        value: "3"
+      - key: R_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://ansent.onrender.com

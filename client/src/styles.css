@@ -2186,3 +2186,17 @@ select:focus {
   font-size: 0.65rem;
   margin-left: 0.2rem;
 }
+
+/* ---------------- Fase 1: tabla de cambios ---------------- */
+.tabla-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--panel-borde);
+  border-radius: var(--radio);
+  background: var(--panel);
+  box-shadow: var(--sombra-1);
+}
+
+.tabla-scroll .tabla td {
+  max-width: 280px;
+  vertical-align: top;
+}
