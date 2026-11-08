@@ -133,6 +133,51 @@ enviar_niveles_api <- function(a, responsable = Sys.getenv("RESPONSABLE", "R loc
   httr2::resp_body_json(resp, simplifyVector = TRUE)
 }
 
+# ==============================================================================
+# enviar_comparacion_api(): manda cmp$niveles (dos periodos) para el gráfico
+# de barras agrupadas. POST /api/dashboard/comparaciones
+# ==============================================================================
+enviar_comparacion_api <- function(cmp, responsable = Sys.getenv("RESPONSABLE", "R local")) {
+  if (!inherits(cmp, "comparacion_periodos")) {
+    stop("'cmp' debe ser la salida de comparar_periodos().", call. = FALSE)
+  }
+
+  claves    <- names(cmp$periodos)
+  etiquetas <- vapply(cmp$periodos, function(p) p$nombre, character(1))
+
+  niveles <- cmp$niveles
+  niveles$periodo <- etiquetas[match(niveles$periodo, claves)]
+
+  periodos <- lapply(seq_along(cmp$periodos), function(i) {
+    p <- cmp$periodos[[i]]
+    n <- unique(niveles$n_mensajes[niveles$periodo == etiquetas[i]])
+    list(
+      clave      = claves[i],
+      nombre     = p$nombre,
+      inicio     = as.character(p$inicio),
+      fin        = as.character(p$fin),
+      n_mensajes = if (length(n)) n[1] else NA
+    )
+  })
+
+  body <- list(
+    nombre      = paste(etiquetas[1], "vs", etiquetas[2]),
+    responsable = responsable,
+    periodos    = periodos,
+    datos       = niveles[, c("sentimiento", "periodo", "nivel_pct",
+                              "mensajes_pct", "n_mensajes"), drop = FALSE]
+  )
+
+  req <- httr2::request(paste0(api_url(), "/api/dashboard/comparaciones")) |>
+    httr2::req_headers(`x-api-key` = api_key()) |>
+    httr2::req_body_json(body, auto_unbox = TRUE) |>
+    httr2::req_method("POST") |>
+    httr2::req_timeout(60)
+
+  resp <- api_perform(req)
+  httr2::resp_body_json(resp, simplifyVector = TRUE)
+}
+
 probar_conexion_api <- function() {
   message("POST /api/cambios ...")
   creado <- enviar_cambio_api(
@@ -162,4 +207,12 @@ if (exists("a") && inherits(a, "analisis_periodo")) {
   print(guardado)
 } else {
   message("Crea 'a' con analizar_periodo() y luego ejecuta enviar_niveles_api(a).")
+}
+
+# Con una comparación ya calculada, sube los dos periodos al dashboard:
+if (exists("cmp") && inherits(cmp, "comparacion_periodos")) {
+  guardada_cmp <- enviar_comparacion_api(cmp)
+  print(guardada_cmp)
+} else {
+  message("Crea 'cmp' con comparar_periodos() y luego ejecuta enviar_comparacion_api(cmp).")
 }

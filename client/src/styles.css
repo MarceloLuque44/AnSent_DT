@@ -2234,3 +2234,24 @@ select:focus {
   outline: 2px solid var(--azul-medio);
   outline-offset: 1px;
 }
+
+.bloque-comparacion {
+  margin-top: 1.2rem;
+}
+
+.panel-grafico-cabecera {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.panel-grafico-titulo {
+  margin: 0;
+  font-family: 'Archivo', 'Public Sans', sans-serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--texto);
+}

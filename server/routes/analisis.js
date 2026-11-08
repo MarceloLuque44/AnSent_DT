@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db/pg.js';
+import { query, pool } from '../db/pg.js';
 import { requireApiKey } from '../middlewares/apiKey.js';
 
 const router = Router();
@@ -11,6 +11,53 @@ const aNumero = (v) => {
 };
 
 const esFecha = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+/**
+ * Inserta/actualiza un periodo y reemplaza sus niveles usando el ejecutor
+ * recibido (normalmente `client.query` dentro de una transacción).
+ */
+async function guardarPeriodo(ejecutar, periodo, filas, responsable) {
+  const cabecera = await ejecutar(
+    `INSERT INTO public.analisis (nombre, fecha_inicio, fecha_fin, n_mensajes, responsable)
+     VALUES ($1, $2::date, $3::date, $4, $5)
+     ON CONFLICT (nombre) DO UPDATE SET
+       fecha_inicio = EXCLUDED.fecha_inicio,
+       fecha_fin    = EXCLUDED.fecha_fin,
+       n_mensajes   = EXCLUDED.n_mensajes,
+       responsable  = EXCLUDED.responsable,
+       creado_en    = CURRENT_TIMESTAMP
+     RETURNING id_analisis`,
+    [
+      periodo.nombre,
+      periodo.inicio,
+      periodo.fin,
+      aNumero(periodo.n_mensajes),
+      responsable || '',
+    ]
+  );
+
+  const idAnalisis = cabecera.rows[0].id_analisis;
+
+  await ejecutar('DELETE FROM public.analisis_nivel WHERE id_analisis = $1', [idAnalisis]);
+
+  await ejecutar(
+    `INSERT INTO public.analisis_nivel
+       (id_analisis, sentimiento, nivel_pct, mensajes_pct, n_mensajes, orden)
+     SELECT $1, * FROM unnest(
+       $2::text[], $3::numeric[], $4::numeric[], $5::int[], $6::int[]
+     )`,
+    [
+      idAnalisis,
+      filas.map((f) => f.sentimiento),
+      filas.map((f) => f.nivel_pct),
+      filas.map((f) => f.mensajes_pct),
+      filas.map((f) => f.n_mensajes),
+      filas.map((_, i) => i),
+    ]
+  );
+
+  return idAnalisis;
+}
 
 /**
  * POST /api/dashboard/niveles
@@ -158,6 +205,238 @@ router.get('/periodos', async (_req, res, next) => {
        ORDER BY creado_en DESC, id_analisis DESC`
     );
     res.json({ ok: true, periodos: r.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/dashboard/comparaciones
+ * R envía cmp$niveles (dos periodos). Guarda ambos periodos en analisis /
+ * analisis_nivel y registra la cabecera en analisis_comparacion.
+ *
+ * Body:
+ * {
+ *   nombre: "A vs B",
+ *   responsable: "R local",
+ *   periodos: [
+ *     { clave: "A", nombre, inicio: "YYYY-MM-DD", fin: "YYYY-MM-DD", n_mensajes },
+ *     { clave: "B", nombre, inicio: "YYYY-MM-DD", fin: "YYYY-MM-DD", n_mensajes }
+ *   ],
+ *   datos: [{ sentimiento, periodo, nivel_pct, mensajes_pct, n_mensajes }, ...]
+ * }
+ */
+router.post('/comparaciones', requireApiKey, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const periodos = Array.isArray(body.periodos) ? body.periodos : [];
+
+    if (periodos.length !== 2) {
+      return res.status(400).json({ error: 'periodos debe tener exactamente 2 elementos' });
+    }
+
+    for (const p of periodos) {
+      if (!p || typeof p.nombre !== 'string' || !p.nombre.trim()) {
+        return res.status(400).json({ error: 'Cada periodo requiere nombre' });
+      }
+      if (!esFecha(p.inicio) || !esFecha(p.fin)) {
+        return res.status(400).json({
+          error: `El periodo ${p.nombre} requiere inicio y fin en formato YYYY-MM-DD`,
+        });
+      }
+    }
+
+    if (!Array.isArray(body.datos) || body.datos.length === 0) {
+      return res.status(400).json({ error: 'datos debe ser un array no vacío' });
+    }
+    if (body.datos.length > 600) {
+      return res.status(400).json({ error: 'datos no puede tener más de 600 filas' });
+    }
+
+    // Permite que R envíe el periodo por nombre o por clave ("A"/"B").
+    const mapa = new Map();
+    periodos.forEach((p) => {
+      mapa.set(String(p.nombre), p);
+      if (p.clave != null) mapa.set(String(p.clave), p);
+    });
+
+    const grupos = new Map(periodos.map((p) => [p.nombre, []]));
+    for (const d of body.datos) {
+      const periodo = mapa.get(String(d.periodo ?? ''));
+      if (!periodo) {
+        return res.status(400).json({
+          error: `Fila con periodo desconocido: ${d.periodo ?? 'sin periodo'}`,
+        });
+      }
+      const fila = {
+        sentimiento: String(d.sentimiento ?? '').trim(),
+        nivel_pct: aNumero(d.nivel_pct),
+        mensajes_pct: aNumero(d.mensajes_pct),
+        n_mensajes: aNumero(d.n_mensajes),
+      };
+      if (!fila.sentimiento || fila.nivel_pct === null || fila.nivel_pct < 0 || fila.nivel_pct > 100) {
+        return res.status(400).json({
+          error: `Fila inválida: se requiere sentimiento y nivel_pct entre 0 y 100 (${fila.sentimiento || 'sin nombre'})`,
+        });
+      }
+      grupos.get(periodo.nombre).push(fila);
+    }
+
+    for (const p of periodos) {
+      if (grupos.get(p.nombre).length === 0) {
+        return res.status(400).json({ error: `El periodo ${p.nombre} no tiene filas en datos` });
+      }
+    }
+
+    if (!pool) {
+      const err = new Error('DATABASE_URL no configurada');
+      err.status = 503;
+      throw err;
+    }
+
+    const nombre = String(
+      body.nombre || `${periodos[0].nombre} vs ${periodos[1].nombre}`
+    ).trim();
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const ids = [];
+      for (const p of periodos) {
+        const id = await guardarPeriodo(
+          client.query.bind(client),
+          p,
+          grupos.get(p.nombre),
+          body.responsable
+        );
+        ids.push(id);
+      }
+
+      const cabecera = await client.query(
+        `INSERT INTO public.analisis_comparacion
+           (nombre, id_analisis_a, id_analisis_b)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (nombre) DO UPDATE SET
+           id_analisis_a = EXCLUDED.id_analisis_a,
+           id_analisis_b = EXCLUDED.id_analisis_b,
+           creado_en     = CURRENT_TIMESTAMP
+         RETURNING id_comparacion`,
+        [nombre, ids[0], ids[1]]
+      );
+
+      await client.query('COMMIT');
+
+      res.status(201).json({
+        ok: true,
+        id_comparacion: cabecera.rows[0].id_comparacion,
+        filas: body.datos.length,
+      });
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/dashboard/comparaciones — listado para el selector del frontend. */
+router.get('/comparaciones', async (_req, res, next) => {
+  try {
+    const r = await query(
+      `SELECT c.id_comparacion, c.nombre, c.creado_en,
+              a.nombre AS periodo_a, b.nombre AS periodo_b
+       FROM public.analisis_comparacion c
+       JOIN public.analisis a ON a.id_analisis = c.id_analisis_a
+       JOIN public.analisis b ON b.id_analisis = c.id_analisis_b
+       ORDER BY c.creado_en DESC, c.id_comparacion DESC`
+    );
+    res.json({ ok: true, comparaciones: r.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/dashboard/comparaciones/:id — datos para el gráfico de barras agrupadas. */
+router.get('/comparaciones/:id', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id de comparación inválido' });
+    }
+
+    const cabecera = await query(
+      `SELECT c.id_comparacion, c.nombre, c.creado_en,
+              a.id_analisis AS id_a, a.nombre AS nombre_a,
+              a.fecha_inicio AS inicio_a, a.fecha_fin AS fin_a, a.n_mensajes AS n_a,
+              b.id_analisis AS id_b, b.nombre AS nombre_b,
+              b.fecha_inicio AS inicio_b, b.fecha_fin AS fin_b, b.n_mensajes AS n_b
+       FROM public.analisis_comparacion c
+       JOIN public.analisis a ON a.id_analisis = c.id_analisis_a
+       JOIN public.analisis b ON b.id_analisis = c.id_analisis_b
+       WHERE c.id_comparacion = $1`,
+      [id]
+    );
+
+    if (cabecera.rows.length === 0) {
+      return res.status(404).json({ error: 'Comparación no encontrada' });
+    }
+
+    const c = cabecera.rows[0];
+
+    const niveles = await query(
+      `SELECT id_analisis, sentimiento, nivel_pct, mensajes_pct, n_mensajes, orden
+       FROM public.analisis_nivel
+       WHERE id_analisis = ANY($1::int[])
+       ORDER BY id_analisis, orden NULLS LAST, sentimiento`,
+      [[c.id_a, c.id_b]]
+    );
+
+    const periodos = [
+      {
+        clave: 'A',
+        nombre: c.nombre_a,
+        inicio: c.inicio_a,
+        fin: c.fin_a,
+        n_mensajes: c.n_a,
+      },
+      {
+        clave: 'B',
+        nombre: c.nombre_b,
+        inicio: c.inicio_b,
+        fin: c.fin_b,
+        n_mensajes: c.n_b,
+      },
+    ];
+
+    const nombrePorId = new Map([
+      [c.id_a, c.nombre_a],
+      [c.id_b, c.nombre_b],
+    ]);
+
+    const datos = niveles.rows.map((r) => ({
+      sentimiento: r.sentimiento,
+      periodo: nombrePorId.get(r.id_analisis),
+      nivel_pct: r.nivel_pct,
+      mensajes_pct: r.mensajes_pct,
+      n_mensajes: r.n_mensajes,
+      orden: r.orden,
+    }));
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ok: true,
+      comparacion: {
+        id_comparacion: c.id_comparacion,
+        nombre: c.nombre,
+        creado_en: c.creado_en,
+      },
+      periodos,
+      datos,
+    });
   } catch (err) {
     next(err);
   }
