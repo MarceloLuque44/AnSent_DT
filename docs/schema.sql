@@ -46,6 +46,29 @@ CREATE TABLE IF NOT EXISTS graficos_info (
 CREATE INDEX IF NOT EXISTS idx_graficos_info_paso ON graficos_info (paso);
 CREATE INDEX IF NOT EXISTS idx_graficos_info_tipo ON graficos_info (tipo);
 
+-- Registro de ejecuciones del pipeline (referenciado por salida_* y bitácoras)
+CREATE TABLE IF NOT EXISTS ejecuciones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  fecha TEXT NOT NULL,                 -- ISO 8601
+  responsable TEXT,                    -- nombre de quien ejecutó
+  archivo TEXT,                        -- nombre del archivo de entrada
+  archivo_md5 TEXT,                    -- hash MD5 del archivo
+  evento TEXT,                         -- tipo de evento de ejecución
+  parametros TEXT,                     -- JSON con parámetros usados
+  estado TEXT,                         -- ok, error, detenido
+  paso_donde_paro TEXT,                -- paso donde se detuvo si hubo error
+  mensaje_error TEXT,                  -- mensaje de error si falló
+  pasos_registrados INTEGER DEFAULT 0,
+  registros_leidos INTEGER,
+  mensajes_limpios INTEGER,
+  mensajes_excluidos INTEGER,
+  emojis_pendientes INTEGER DEFAULT 0,
+  cambios_detectados TEXT              -- IDs de cambios asociados
+);
+
+CREATE INDEX IF NOT EXISTS idx_ejecuciones_fecha ON ejecuciones(fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_ejecuciones_estado ON ejecuciones(estado);
+
 -- ==============================================================================
 -- Ejemplos de consultas utiles
 -- ==============================================================================
