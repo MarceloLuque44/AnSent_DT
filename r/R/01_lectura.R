@@ -177,7 +177,11 @@ cargar_config <- function(dir_config, sentimientos_activos = NULL) {
 auditar_entrada <- function(ctx, d) {
   M <- "1. Auditoría y perfilado inicial"
   N <- nrow(d)
-  rf <- range(as.Date(substr(d$fecha_raw, 1, 10)), na.rm = TRUE)
+  # optional = TRUE: una fecha no ISO no debe abortar la auditoria; se cuenta
+  # despues en "Fechas no interpretables".
+  fechas_aud <- suppressWarnings(as.Date(substr(d$fecha_raw, 1, 10), optional = TRUE))
+  rf <- suppressWarnings(range(fechas_aud, na.rm = TRUE))
+  if (!all(is.finite(rf))) rf <- c(as.Date(NA), as.Date(NA))
 
   # ▌BITÁCORA OFICIAL
   registrar_hallazgo(ctx, metodologia = M, campo = "(todo el dataset)", atributo = "estructura",

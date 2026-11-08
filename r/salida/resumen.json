@@ -1,7 +1,7 @@
 {
   "estado": "ok",
   "archivo": "result.json",
-  "responsable": "",
+  "responsable": "Patricia",
   "registros_leidos": 26030,
   "mensajes_limpios": 19496,
   "mensajes_excluidos": 6534,
@@ -15,9 +15,9 @@
   "rango_fechas": ["2022-12-26", "2026-10-17"],
   "sentimientos_activos": ["alegria", "gratitud", "esperanza", "seguridad", "admiracion", "satisfaccion_tranquilidad", "sorpresa", "confusion", "preocupacion", "tristeza", "enojo", "decepcion", "frustracion_cansancio", "ironia", "curiosidad"],
   "polaridad": {
-    "negativo": 1184,
-    "neutral": 16133,
-    "positivo": 2179
+    "negativo": 1181,
+    "neutral": 16137,
+    "positivo": 2178
   },
   "emojis_pendientes": 0,
   "pasos_bitacora": 52

@@ -56,6 +56,9 @@ rellenar_nulos <- function(ctx, d) {
         v <- datos[[cn]]
         m <- vacio(v)
         if (!any(m)) next
+        # Las columnas Date/POSIXct no se rellenan con texto: asignar "ninguno"
+        # a una fecha dispara as.Date("ninguno") y oculta el problema real.
+        if (inherits(v, "Date") || inherits(v, "POSIXct")) next
         val <- if (!is.null(REGLAS_NULOS[[cn]])) REGLAS_NULOS[[cn]]
                else if (is.numeric(v)) 0 else if (is.logical(v)) FALSE else "ninguno"
         datos[[cn]][m] <- val

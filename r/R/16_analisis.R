@@ -45,9 +45,11 @@ analizar_periodo <- function(datos, fecha_inicio = NULL, fecha_fin = NULL,
                              shallow = TRUE, libreria = TRUE, max_mensajes_shallow = 1500,
                              max_mensajes_libreria = 5000, modelo_udpipe = NULL,
                              registrar = TRUE, dir_bitacoras = "bitacoras", dir_salida = "salida") {
-  if (!is.null(fecha_inicio) || !is.null(fecha_fin)) {
-    fi <- as.Date(fecha_inicio %||% min(datos$mensajes$fecha, na.rm = TRUE))
-    ff <- as.Date(fecha_fin %||% max(datos$mensajes$fecha, na.rm = TRUE))
+  fi <- .fecha_param(fecha_inicio)
+  ff <- .fecha_param(fecha_fin)
+  if (!is.null(fi) || !is.null(ff)) {
+    fi <- fi %||% as.Date(min(datos$mensajes$fecha, na.rm = TRUE))
+    ff <- ff %||% as.Date(max(datos$mensajes$fecha, na.rm = TRUE))
     per <- list(nombre = paste0(format(fi, "%Y-%m-%d"), "_a_", format(ff, "%Y-%m-%d")),
                 inicio = fi, fin = ff)
     m <- subset(datos$mensajes, as.Date(fecha) >= fi & as.Date(fecha) <= ff)
@@ -106,12 +108,13 @@ comparar_periodos <- function(datos, fecha_inicio_a = NULL, fecha_fin_a = NULL,
                               fecha_inicio_b = NULL, fecha_fin_b = NULL,
                               periodoA = NULL, periodoB = NULL, periodos = cargar_periodos(), libreria = TRUE,
                               max_mensajes_libreria = 5000, registrar = TRUE, dir_bitacoras = "bitacoras") {
-  if (!is.null(fecha_inicio_a) || !is.null(fecha_fin_a) ||
-      !is.null(fecha_inicio_b) || !is.null(fecha_fin_b)) {
-    fiA <- as.Date(fecha_inicio_a %||% min(datos$mensajes$fecha, na.rm = TRUE))
-    ffA <- as.Date(fecha_fin_a %||% max(datos$mensajes$fecha, na.rm = TRUE))
-    fiB <- as.Date(fecha_inicio_b %||% min(datos$mensajes$fecha, na.rm = TRUE))
-    ffB <- as.Date(fecha_fin_b %||% max(datos$mensajes$fecha, na.rm = TRUE))
+  fiA <- .fecha_param(fecha_inicio_a); ffA <- .fecha_param(fecha_fin_a)
+  fiB <- .fecha_param(fecha_inicio_b); ffB <- .fecha_param(fecha_fin_b)
+  if (!is.null(fiA) || !is.null(ffA) || !is.null(fiB) || !is.null(ffB)) {
+    fiA <- fiA %||% as.Date(min(datos$mensajes$fecha, na.rm = TRUE))
+    ffA <- ffA %||% as.Date(max(datos$mensajes$fecha, na.rm = TRUE))
+    fiB <- fiB %||% as.Date(min(datos$mensajes$fecha, na.rm = TRUE))
+    ffB <- ffB %||% as.Date(max(datos$mensajes$fecha, na.rm = TRUE))
     perA <- list(nombre = paste0(format(fiA, "%Y-%m-%d"), "_a_", format(ffA, "%Y-%m-%d")),
                  inicio = fiA, fin = ffA)
     perB <- list(nombre = paste0(format(fiB, "%Y-%m-%d"), "_a_", format(ffB, "%Y-%m-%d")),

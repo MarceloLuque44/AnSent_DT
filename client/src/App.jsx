@@ -45,7 +45,7 @@ function Shell() {
   const [ruta, setRuta] = useState(obtenerRutaActual);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [carpetasAbiertas, setCarpetasAbiertas] = useState(() => new Set());
-  const { carpetas, carpetasActivas, graficosOcultos, toggleCarpeta, alternarGrafico, eliminarCarpeta, eliminarGrafico } =
+  const { carpetas, carpetasActivas, graficosOcultos, cargarCarpetas, toggleCarpeta, alternarGrafico, eliminarCarpeta, eliminarGrafico } =
     useDashboard();
 
   useEffect(() => {
@@ -61,6 +61,13 @@ function Shell() {
 
   const alternarMenu = () => {
     setMenuAbierto((abierto) => (ruta === 'dashboard' ? !abierto : true));
+  };
+
+  // Cada clic en "Dashboard" vuelve a leer las carpetas del servidor, para
+  // reflejar carpetas eliminadas o creadas fuera de la app.
+  const alClicDashboard = () => {
+    cargarCarpetas();
+    alternarMenu();
   };
 
   const alternarCarpetaAbierta = (nombre) => {
@@ -103,7 +110,7 @@ function Shell() {
                   aria-current={ruta === vista.id ? 'page' : undefined}
                   aria-expanded={menuAbierto}
                   aria-controls="nav-carpetas-dashboard"
-                  onClick={alternarMenu}
+                  onClick={alClicDashboard}
                 >
                   <span className="nav-titulo">{vista.etiqueta}</span>
                   <span className="nav-desc">{vista.descripcion}</span>

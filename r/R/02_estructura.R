@@ -9,6 +9,22 @@ RX_MENC <- "(?<![A-Za-z0-9._%+-])@[A-Za-z0-9_]{3,}"
 RX_TEL  <- "(?<![0-9])(?:\\+?591[ -]?)?[67][0-9]{7}(?![0-9])|\\+[0-9][0-9 -]{7,}[0-9]"
 RX_HASH <- "#[\\p{L}\\p{N}_]+"
 
+# Convierte un parametro de fecha del frontend ("", " ", NULL, "2026-11-04")
+# en un Date o NULL. Lanza un error claro si el texto no es una fecha ISO.
+.fecha_param <- function(x) {
+  if (is.null(x) || !length(x)) return(NULL)
+  x <- trimws(as.character(x)[1])
+  if (is.na(x) || !nzchar(x)) return(NULL)
+  if (!grepl("^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}$", x))
+    stop("Fecha invalida: '", x, "'. Usa el formato AAAA-MM-DD (por ejemplo 2026-11-04).",
+         call. = FALSE)
+  d <- tryCatch(as.Date(x), error = function(e) NA)
+  if (is.na(d))
+    stop("Fecha invalida: '", x, "'. Usa el formato AAAA-MM-DD (por ejemplo 2026-11-04).",
+         call. = FALSE)
+  d
+}
+
 estructurar <- function(ctx, d) {
   M <- "2. Normalización de estructura y formatos"
   p <- ctx$p
@@ -91,14 +107,20 @@ estructurar <- function(ctx, d) {
  
 
   # ── 2.5 Recorte por periodo (opcional) ─────────────────────────────────────────
-  if (!is.null(p$fecha_inicio) || !is.null(p$fecha_fin)) {
-    ini <- if (!is.null(p$fecha_inicio)) as.Date(p$fecha_inicio) else as.Date("1900-01-01")
-    fin <- if (!is.null(p$fecha_fin)) as.Date(p$fecha_fin) else as.Date("2999-12-31")
+  # El frontend envia "" cuando el campo se deja vacio; eso NO es una fecha.
+  # Si se trataba como fecha, as.Date("") devolvia NA, el filtro dejaba filas NA
+  # y el pipeline terminaba con errores confusos (p. ej. en quantile o al
+  # rellenar la columna Date con "ninguno").
+  fi <- .fecha_param(p$fecha_inicio)
+  ff <- .fecha_param(p$fecha_fin)
+  if (!is.null(fi) || !is.null(ff)) {
+    ini <- fi %||% as.Date("1900-01-01")
+    fin <- ff %||% as.Date("2999-12-31")
     # ▌BITÁCORA OFICIAL
     d <- registrar_paso(ctx, d, metodologia = M,
       campo = "fecha", atributo = "fecha", problema = "Mensajes fuera del periodo pedido",
       accion = sprintf("Se recortó el dataset al periodo %s a %s (ambos inclusive).",
-                       p$fecha_inicio %||% "inicio", p$fecha_fin %||% "fin"),
+                       fi %||% "inicio", ff %||% "fin"),
       justificacion = "La licenciada pide analizar periodos concretos (por ejemplo, una temporada) y compararlos entre sí.",
       # ▌CÓDIGO
       codigo = {
@@ -141,6 +163,7 @@ estructurar <- function(ctx, d) {
     # CÓDIGO
     codigo = {
       t <- datos$texto_original
+      t[is.na(t)] <- ""
       datos$n_caracteres <- nchar(t)
       datos$n_palabras <- stringi::stri_count_words(t)
       datos$n_enlaces <- stringi::stri_count_regex(t, RX_URL)

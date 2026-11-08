@@ -64,6 +64,20 @@ if (length(file_arg) > 0) {
 }
 PROYECTO <- SCRIPT_DIR
 
+# Lee el cuerpo JSON y normaliza los parametros de fecha: el frontend manda ""
+# cuando el campo se deja vacio, y "" NO es una fecha (as.Date("") es NA).
+.parse_body <- function(req) {
+  body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+  if (!is.list(body)) return(list())
+  for (k in grep("^fecha_", names(body), value = TRUE)) {
+    v <- body[[k]]
+    if (is.null(v) || !length(v)) { body[[k]] <- NULL; next }
+    v <- trimws(as.character(v)[1])
+    body[[k]] <- if (is.na(v) || !nzchar(v)) NULL else v
+  }
+  body
+}
+
 # Carpeta de salida para los graficos del analisis (solo pasos 2 y 3 y dashboard):
 # sube un nivel desde r/ y agrega client/src/views/salida/analisis.
 # El resto de archivos exportados se queda en r/salida/ — no se modifica.
@@ -530,7 +544,7 @@ function(req, res) {
   cat("[Plumber] Paso 1: Directorio de configuracion:", file.path(PROYECTO, "config"), "\n")
   cat("[Plumber] Paso 1: Directorio de bitacoras:", file.path(PROYECTO, "bitacoras"), "\n")
 
-  body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+  body <- .parse_body(req)
   fecha_inicio <- body$fecha_inicio %||% NULL
   fecha_fin <- body$fecha_fin %||% NULL
   responsable <- body$responsable %||% Sys.getenv("RESPONSABLE", "")
@@ -646,7 +660,7 @@ function(req, res) {
   cat("[Plumber] Paso 2: Carpeta del proyecto R:", PROYECTO, "\n")
   tryCatch(
     {
-      body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+      body <- .parse_body(req)
       fecha_inicio <- body$fecha_inicio %||% NULL
       fecha_fin <- body$fecha_fin %||% NULL
       dir_salida <- body$dir_salida %||% file.path(PROYECTO, "salida")
@@ -730,7 +744,7 @@ function(req, res) {
   cat("[Plumber] Paso 3: Carpeta del proyecto R:", PROYECTO, "\n")
   tryCatch(
     {
-      body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+      body <- .parse_body(req)
       fecha_inicio_a <- body$fecha_inicio_a %||% NULL
       fecha_fin_a <- body$fecha_fin_a %||% NULL
       fecha_inicio_b <- body$fecha_inicio_b %||% NULL
@@ -824,7 +838,7 @@ function(req, res) {
   cat("[Plumber] Paso 4: Carpeta del proyecto R:", PROYECTO, "\n")
   tryCatch(
     {
-      body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+      body <- .parse_body(req)
       texto <- body$texto
       if (is.null(texto) || !nzchar(texto)) {
         res$setHeader("Content-Type", "application/json")
@@ -1011,7 +1025,7 @@ function(req, res) {
         res$status <- 404
         return(jsonlite::toJSON(list(ok = FALSE, error = "Archivo de sentimientos no encontrado"), auto_unbox = TRUE))
       }
-      body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+      body <- .parse_body(req)
       sentimientos <- body$sentimientos
       if (is.null(sentimientos) || !is.list(sentimientos)) {
         res$status <- 400
@@ -1400,7 +1414,7 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     cat("[Plumber] Paso 1: Directorio de configuracion:", file.path(PROYECTO, "config"), "\n")
     cat("[Plumber] Paso 1: Directorio de bitacoras:", file.path(PROYECTO, "bitacoras"), "\n")
 
-    body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+    body <- .parse_body(req)
     fecha_inicio <- body$fecha_inicio %||% NULL
     fecha_fin <- body$fecha_fin %||% NULL
     responsable <- body$responsable %||% Sys.getenv("RESPONSABLE", "")
@@ -1512,7 +1526,7 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     cat("[Plumber] Paso 2: Carpeta del proyecto R:", PROYECTO, "\n")
     tryCatch(
       {
-        body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+        body <- .parse_body(req)
         fecha_inicio <- body$fecha_inicio %||% NULL
         fecha_fin <- body$fecha_fin %||% NULL
         dir_salida <- body$dir_salida %||% file.path(PROYECTO, "salida")
@@ -1591,7 +1605,7 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     cat("[Plumber] Paso 3: Carpeta del proyecto R:", PROYECTO, "\n")
     tryCatch(
       {
-        body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+        body <- .parse_body(req)
         fecha_inicio_a <- body$fecha_inicio_a %||% NULL
         fecha_fin_a <- body$fecha_fin_a %||% NULL
         fecha_inicio_b <- body$fecha_inicio_b %||% NULL
@@ -1679,7 +1693,7 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
     cat("[Plumber] Paso 4: Carpeta del proyecto R:", PROYECTO, "\n")
     tryCatch(
       {
-        body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+        body <- .parse_body(req)
         texto <- body$texto
         if (is.null(texto) || !nzchar(texto)) {
           return(list(
@@ -1907,7 +1921,7 @@ if (!exists(".plumber_iniciado", envir = globalenv()) || !get(".plumber_iniciado
           res$setHeader("Content-Type", "application/json")
           return(jsonlite::toJSON(list(ok = FALSE, error = "Archivo de sentimientos no encontrado"), auto_unbox = TRUE))
         }
-        body <- tryCatch(jsonlite::fromJSON(req$postBody), error = function(e) list())
+        body <- .parse_body(req)
         sentimientos <- body$sentimientos
         if (is.null(sentimientos) || !is.list(sentimientos)) {
           res$status <- 400

@@ -39,16 +39,16 @@ topicos_lda <- function(tokens, k = 6, agrupar = c("dia", "mes"), min_tokens_doc
   ids <- paste0("T", seq_len(k))
   terminos <- do.call(rbind, lapply(seq_len(k), function(t) {
     b <- sort(beta[t, ], decreasing = TRUE)[seq_len(top)]
-    data.frame(topico = ids[t], etiqueta = etiqueta[t], termino = names(b), beta = as.numeric(b),
-               stringsAsFactors = FALSE)
+    data.frame(topico = ids[t], etiqueta = unname(etiqueta[t]), termino = names(b),
+               beta = as.numeric(b), stringsAsFactors = FALSE)
   }))
   dominante <- data.frame(doc = rownames(gamma), topico = ids[max.col(gamma, ties.method = "first")],
                           peso = apply(gamma, 1, max), stringsAsFactors = FALSE)
   mes <- if (agrupar == "dia") substr(rownames(gamma), 1, 7) else rownames(gamma)
   peso_mes <- do.call(rbind, lapply(seq_len(k), function(t) {
     a <- tapply(gamma[, t], mes, mean)
-    data.frame(anio_mes = names(a), topico = ids[t], etiqueta = etiqueta[t], peso_pct = as.numeric(a) * 100,
-               stringsAsFactors = FALSE)
+    data.frame(anio_mes = names(a), topico = ids[t], etiqueta = unname(etiqueta[t]),
+               peso_pct = as.numeric(a) * 100, stringsAsFactors = FALSE)
   }))
   list(paso = "Topic modeling: LDA con Gibbs (R/12_topicos.R) sobre tokens.csv", k = k, agrupar = agrupar,
        n_documentos = length(docs), n_terminos = length(terms), modelo = mod, beta = beta,
