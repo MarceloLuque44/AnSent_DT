@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(
   cors({
     origin: config.corsOrigins.length ? config.corsOrigins : false,

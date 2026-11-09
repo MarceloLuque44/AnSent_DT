@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api.js';
 import TablaCambios from '../components/TablaCambios.jsx';
 
@@ -154,7 +154,7 @@ export default function Bitacoras() {
   // --- Detalle de ejecución ---
   const [detalleId, setDetalleId] = useState(null);
   const [cabecera, setCabecera] = useState(null);
-  const [outputs, setOutputs] = useRef({});
+  const [outputs, setOutputs] = useState({});
   const [detalleCargando, setDetalleCargando] = useState(false);
   const [detalleError, setDetalleError] = useState(null);
 

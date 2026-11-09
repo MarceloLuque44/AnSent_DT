@@ -306,7 +306,7 @@ router.post('/:output', requireApiKey, async (req, res, next) => {
 
     await reemplazarOutput(idEjecucion, cfg.tabla, cfg.columnas, cfg.tipos, datos);
 
-    res.status(201).json({ ok: true, id_ejecucion, filas: datos.length });
+    res.status(201).json({ ok: true, id_ejecucion: idEjecucion, filas: datos.length });
   } catch (err) {
     next(err);
   }
