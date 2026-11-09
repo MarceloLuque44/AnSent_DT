@@ -442,4 +442,248 @@ router.get('/comparaciones/:id', async (req, res, next) => {
   }
 });
 
+/**
+ * Upsert de la cabecera de un periodo en public.analisis (por nombre).
+ * Devuelve id_analisis. Se usa en POST /serie y POST /sankey.
+ */
+async function upsertCabecera(ejecutar, periodo, n_mensajes, responsable) {
+  return ejecutar(
+    `INSERT INTO public.analisis (nombre, fecha_inicio, fecha_fin, n_mensajes, responsable)
+     VALUES ($1, $2::date, $3::date, $4, $5)
+     ON CONFLICT (nombre) DO UPDATE SET
+       fecha_inicio = EXCLUDED.fecha_inicio,
+       fecha_fin    = EXCLUDED.fecha_fin,
+       n_mensajes   = EXCLUDED.n_mensajes,
+       responsable  = EXCLUDED.responsable,
+       creado_en    = CURRENT_TIMESTAMP
+     RETURNING id_analisis`,
+    [periodo.nombre, periodo.inicio, periodo.fin, aNumero(n_mensajes), responsable || '']
+  );
+}
+
+/**
+ * Valida el bloque `periodo` común a /serie y /sankey.
+ */
+function validarPeriodo(periodo) {
+  if (!periodo || typeof periodo.nombre !== 'string' || !periodo.nombre.trim()) {
+    return 'periodo.nombre es obligatorio';
+  }
+  if (!esFecha(periodo.inicio) || !esFecha(periodo.fin)) {
+    return 'periodo.inicio y periodo.fin deben ser YYYY-MM-DD';
+  }
+  return null;
+}
+
+/**
+ * POST /api/dashboard/serie
+ * Body: { periodo: { nombre, inicio: "YYYY-MM-DD", fin: "YYYY-MM-DD" },
+ *         n_mensajes, responsable,
+ *         datos: [{ anio_mes, sentimiento, pct, n_mensajes }, ...] }
+ * Upsert del periodo por nombre y reemplaza las filas de serie mensual.
+ */
+router.post('/serie', requireApiKey, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const periodo = body.periodo ?? {};
+
+    const errPeriodo = validarPeriodo(periodo);
+    if (errPeriodo) {
+      return res.status(400).json({ error: errPeriodo });
+    }
+    if (!Array.isArray(body.datos) || body.datos.length === 0) {
+      return res.status(400).json({ error: 'datos debe ser un array no vacío' });
+    }
+    if (body.datos.length > 2000) {
+      return res.status(400).json({ error: 'datos no puede tener más de 2000 filas' });
+    }
+
+    const filas = body.datos.map((d) => ({
+      anio_mes: String(d.anio_mes ?? '').trim(),
+      sentimiento: String(d.sentimiento ?? '').trim(),
+      pct: aNumero(d.pct),
+      n_mensajes: aNumero(d.n_mensajes),
+    }));
+
+    const invalida = filas.find(
+      (f) => !f.anio_mes || !f.sentimiento || f.pct === null || f.pct < 0 || f.pct > 100
+    );
+    if (invalida) {
+      return res.status(400).json({
+        error: `Fila inválida: se requiere anio_mes, sentimiento y pct entre 0 y 100 (${invalida.sentimiento || 'sin nombre'})`,
+      });
+    }
+
+    const cabecera = await upsertCabecera(query, periodo, body.n_mensajes, body.responsable);
+    const idAnalisis = cabecera.rows[0].id_analisis;
+
+    await query('DELETE FROM public.analisis_serie_mensual WHERE id_analisis = $1', [idAnalisis]);
+
+    await query(
+      `INSERT INTO public.analisis_serie_mensual
+         (id_analisis, anio_mes, sentimiento, pct, n_mensajes)
+       SELECT $1, * FROM unnest(
+         $2::text[], $3::text[], $4::numeric[], $5::int[]
+       )`,
+      [
+        idAnalisis,
+        filas.map((f) => f.anio_mes),
+        filas.map((f) => f.sentimiento),
+        filas.map((f) => f.pct),
+        filas.map((f) => f.n_mensajes),
+      ]
+    );
+
+    res.status(201).json({ ok: true, id_analisis: idAnalisis, filas: filas.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/dashboard/serie?periodo=<nombre>
+ * Devuelve { ok, periodo, n_mensajes, datos } con la serie mensual guardada.
+ */
+router.get('/serie', async (req, res, next) => {
+  try {
+    const { periodo } = req.query;
+
+    const cabecera = await query(
+      `SELECT id_analisis, nombre, fecha_inicio, fecha_fin, n_mensajes
+       FROM public.analisis
+       ${periodo ? 'WHERE nombre = $1' : ''}
+       ORDER BY creado_en DESC, id_analisis DESC
+       LIMIT 1`,
+      periodo ? [String(periodo)] : []
+    );
+
+    if (cabecera.rows.length === 0) {
+      return res.json({ ok: true, periodo: null, n_mensajes: null, datos: [] });
+    }
+
+    const a = cabecera.rows[0];
+    const serie = await query(
+      `SELECT anio_mes, sentimiento, pct, n_mensajes
+       FROM public.analisis_serie_mensual
+       WHERE id_analisis = $1
+       ORDER BY anio_mes, sentimiento`,
+      [a.id_analisis]
+    );
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ok: true,
+      periodo: { nombre: a.nombre, inicio: a.fecha_inicio, fin: a.fecha_fin },
+      n_mensajes: a.n_mensajes,
+      datos: serie.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/dashboard/sankey
+ * Body: { periodo: { nombre, inicio: "YYYY-MM-DD", fin: "YYYY-MM-DD" },
+ *         responsable,
+ *         datos: [{ topico, sentimiento_dominante, freq }, ...] }
+ * Upsert del periodo por nombre y reemplaza las filas del sankey.
+ */
+router.post('/sankey', requireApiKey, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const periodo = body.periodo ?? {};
+
+    const errPeriodo = validarPeriodo(periodo);
+    if (errPeriodo) {
+      return res.status(400).json({ error: errPeriodo });
+    }
+    if (!Array.isArray(body.datos) || body.datos.length === 0) {
+      return res.status(400).json({ error: 'datos debe ser un array no vacío' });
+    }
+    if (body.datos.length > 500) {
+      return res.status(400).json({ error: 'datos no puede tener más de 500 filas' });
+    }
+
+    const filas = body.datos.map((d) => ({
+      topico: String(d.topico ?? '').trim(),
+      sentimiento_dominante: String(d.sentimiento_dominante ?? '').trim(),
+      freq: aNumero(d.freq),
+    }));
+
+    const invalida = filas.find(
+      (f) => !f.topico || !f.sentimiento_dominante || f.freq === null || f.freq < 0
+    );
+    if (invalida) {
+      return res.status(400).json({
+        error: `Fila inválida: se requiere topico, sentimiento_dominante y freq >= 0 (${invalida.topico || 'sin nombre'})`,
+      });
+    }
+
+    const cabecera = await upsertCabecera(query, periodo, body.n_mensajes, body.responsable);
+    const idAnalisis = cabecera.rows[0].id_analisis;
+
+    await query('DELETE FROM public.analisis_sankey WHERE id_analisis = $1', [idAnalisis]);
+
+    await query(
+      `INSERT INTO public.analisis_sankey
+         (id_analisis, topico, sentimiento_dominante, freq)
+       SELECT $1, * FROM unnest(
+         $2::text[], $3::text[], $4::int[]
+       )`,
+      [
+        idAnalisis,
+        filas.map((f) => f.topico),
+        filas.map((f) => f.sentimiento_dominante),
+        filas.map((f) => f.freq),
+      ]
+    );
+
+    res.status(201).json({ ok: true, id_analisis: idAnalisis, filas: filas.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/dashboard/sankey?periodo=<nombre>
+ * Devuelve { ok, periodo, n_mensajes, datos } con el cruce tópico x sentimiento.
+ */
+router.get('/sankey', async (req, res, next) => {
+  try {
+    const { periodo } = req.query;
+
+    const cabecera = await query(
+      `SELECT id_analisis, nombre, fecha_inicio, fecha_fin, n_mensajes
+       FROM public.analisis
+       ${periodo ? 'WHERE nombre = $1' : ''}
+       ORDER BY creado_en DESC, id_analisis DESC
+       LIMIT 1`,
+      periodo ? [String(periodo)] : []
+    );
+
+    if (cabecera.rows.length === 0) {
+      return res.json({ ok: true, periodo: null, n_mensajes: null, datos: [] });
+    }
+
+    const a = cabecera.rows[0];
+    const sankey = await query(
+      `SELECT topico, sentimiento_dominante, freq
+       FROM public.analisis_sankey
+       WHERE id_analisis = $1
+       ORDER BY topico, sentimiento_dominante`,
+      [a.id_analisis]
+    );
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ok: true,
+      periodo: { nombre: a.nombre, inicio: a.fecha_inicio, fin: a.fecha_fin },
+      n_mensajes: a.n_mensajes,
+      datos: sankey.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

@@ -112,7 +112,7 @@ enviar_niveles_api <- function(a, responsable = Sys.getenv("RESPONSABLE", "R loc
   niv <- a$nivel[order(-a$nivel$nivel_pct), , drop = FALSE]
   niv <- niv[, c("sentimiento", "nivel_pct", "mensajes_pct", "n_mensajes"), drop = FALSE]
 
-  body <- list(
+  body_niv <- list(
     periodo = list(
       nombre = a$periodo$nombre,
       inicio = as.character(a$periodo$inicio),
@@ -123,14 +123,67 @@ enviar_niveles_api <- function(a, responsable = Sys.getenv("RESPONSABLE", "R loc
     datos       = niv
   )
 
-  req <- httr2::request(paste0(api_url(), "/api/dashboard/niveles")) |>
-    httr2::req_headers(`x-api-key` = api_key()) |>
-    httr2::req_body_json(body, auto_unbox = TRUE) |>
-    httr2::req_method("POST") |>
-    httr2::req_timeout(60)
+  .post <- function(path, body, timeout = 60) {
+    req <- httr2::request(paste0(api_url(), path)) |>
+      httr2::req_headers(`x-api-key` = api_key()) |>
+      httr2::req_body_json(body, auto_unbox = TRUE) |>
+      httr2::req_method("POST") |>
+      httr2::req_timeout(timeout)
+    resp <- api_perform(req)
+    httr2::resp_body_json(resp, simplifyVector = TRUE)
+  }
 
-  resp <- api_perform(req)
-  httr2::resp_body_json(resp, simplifyVector = TRUE)
+  guardado <- .post("/api/dashboard/niveles", body_niv)
+
+  # --- Serie mensual (g_tiempo, g_apilado, g_dispersion) ----------------------
+  if (!is.null(a$serie) && nrow(a$serie)) {
+    body_serie <- list(
+      periodo = list(
+        nombre = a$periodo$nombre,
+        inicio = as.character(a$periodo$inicio),
+        fin    = as.character(a$periodo$fin)
+      ),
+      n_mensajes  = a$n_mensajes,
+      responsable = responsable,
+      datos       = a$serie[, c("anio_mes", "sentimiento", "pct", "n_mensajes"), drop = FALSE]
+    )
+    tryCatch({
+      guardado_serie <- .post("/api/dashboard/serie", body_serie)
+      message("Serie mensual enviada: ", guardado_serie$filas, " filas")
+    }, error = function(e) message("No se pudo enviar la serie mensual: ", conditionMessage(e)))
+  }
+
+  # --- Sankey: tópico x sentimiento dominante (g_sankey) ----------------------
+  if (!is.null(a$topicos) && !is.null(a$mensajes) && nrow(a$mensajes)) {
+    m <- mensajes_con_topico(a$mensajes, a$topicos)
+    nom <- nombres_sentimientos(m)
+    m <- m[!is.na(m$topico) & m$sentimiento_dominante %in% nom, , drop = FALSE]
+    if (nrow(m)) {
+      cruz <- as.data.frame.table(
+        table(topico = m$topico, sentimiento_dominante = m$sentimiento_dominante),
+        stringsAsFactors = FALSE
+      )
+      cruz <- cruz[cruz$Freq > 0, , drop = FALSE]
+      names(cruz) <- c("topico", "sentimiento_dominante", "freq")
+      body_sankey <- list(
+        periodo = list(
+          nombre = a$periodo$nombre,
+          inicio = as.character(a$periodo$inicio),
+          fin    = as.character(a$periodo$fin)
+        ),
+        responsable = responsable,
+        datos = cruz
+      )
+      tryCatch({
+        guardado_sankey <- .post("/api/dashboard/sankey", body_sankey)
+        message("Sankey enviado: ", guardado_sankey$filas, " filas")
+      }, error = function(e) message("No se pudo enviar el sankey: ", conditionMessage(e)))
+    } else {
+      message("Sankey: no hay cruces topico x sentimiento dominante válidos para enviar.")
+    }
+  }
+
+  guardado
 }
 
 # ==============================================================================
