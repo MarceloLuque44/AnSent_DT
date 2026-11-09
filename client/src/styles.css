@@ -2354,3 +2354,84 @@ select:focus {
   white-space: nowrap;
 }
 
+/* ============================================================
+   MENSAJES LIMPIOS — tarjetas en grid (detalle de ejecución)
+   ============================================================ */
+.tarjetas-mensajes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.tarjeta-mensaje {
+  background: var(--panel);
+  border: 1px solid var(--panel-borde);
+  border-radius: var(--radio);
+  padding: 0.9rem;
+  box-shadow: var(--brillo-interior), var(--sombra-1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tarjeta-mensaje:hover {
+  border-color: #bfd8f8;
+  box-shadow: var(--brillo-interior), 0 12px 24px -12px rgba(23, 70, 176, 0.35);
+}
+
+.tarjeta-cabecera {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.tarjeta-id {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--azul-oscuro);
+  background: var(--azul-suave);
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+}
+
+.tarjeta-fecha {
+  font-size: 0.72rem;
+  color: var(--texto-suave);
+}
+
+.tarjeta-cuerpo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tarjeta-dato {
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+  border-bottom: 1px solid var(--panel-borde-suave);
+  padding-bottom: 0.2rem;
+}
+
+.tarjeta-texto {
+  font-size: 0.85rem;
+  color: var(--texto);
+  margin-top: 0.25rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.tarjeta-datos {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--panel-borde-suave);
+}
+
+.tarjeta-dinamico {
+  font-size: 0.75rem;
+  color: var(--texto-suave);
+  word-break: break-word;
+}
+

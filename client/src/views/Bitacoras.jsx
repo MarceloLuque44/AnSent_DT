@@ -61,17 +61,20 @@ function Panel({ clave, titulo, abierto, alternar, children }) {
   );
 }
 
-/** Tabla paginada (muestra PAGE_SIZE filas por página). */
-function TablaPaginada({ filas, cabeceras, filasRenderer, clave, pagina, setPagina }) {
-  const total = filas.length;
-  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+/** Tabla paginada (muestra PAGE_SIZE filas por página).
+ * serverPaginada: si los datos ya vienen paginados del servidor (10 por página),
+ * no se vuelve a cortar localmente; se muestran todas las filas recibidas.
+ * total: conteo total del servidor (necesario cuando serverPaginada=true). */
+function TablaPaginada({ filas, total, cabeceras, filasRenderer, clave, pagina, setPagina, serverPaginada = false }) {
+  const totalRegistros = serverPaginada ? total : filas.length;
+  const totalPaginas = Math.max(1, Math.ceil(totalRegistros / PAGE_SIZE));
   const p = Math.min(Math.max(1, pagina), totalPaginas);
   const inicio = (p - 1) * PAGE_SIZE;
-  const pageRows = filas.slice(inicio, inicio + PAGE_SIZE);
+  const pageRows = serverPaginada ? filas : filas.slice(inicio, inicio + PAGE_SIZE);
 
   return (
     <>
-      {total > 0 && (
+      {totalRegistros > 0 && (
         <div className="tabla-scroll">
           <table className="tabla">
             <thead>
@@ -83,7 +86,7 @@ function TablaPaginada({ filas, cabeceras, filasRenderer, clave, pagina, setPagi
           </table>
         </div>
       )}
-      {total > PAGE_SIZE && (
+      {!serverPaginada && totalRegistros > PAGE_SIZE && (
         <div className="paginacion">
           <button
             type="button"
@@ -93,7 +96,7 @@ function TablaPaginada({ filas, cabeceras, filasRenderer, clave, pagina, setPagi
           >
             Anterior
           </button>
-          <span className="pagina-actual">Página {p} de {totalPaginas} · {total} registros</span>
+          <span className="pagina-actual">Página {p} de {totalPaginas} · {totalRegistros} registros</span>
           <button
             type="button"
             className="btn-pag"
@@ -104,7 +107,7 @@ function TablaPaginada({ filas, cabeceras, filasRenderer, clave, pagina, setPagi
           </button>
         </div>
       )}
-      {total === 0 && <p className="placeholder">Sin registros para mostrar.</p>}
+      {totalRegistros === 0 && <p className="placeholder">Sin registros para mostrar.</p>}
     </>
   );
 }
@@ -157,6 +160,7 @@ export default function Bitacoras() {
   const [outputs, setOutputs] = useState({});
   const [detalleCargando, setDetalleCargando] = useState(false);
   const [detalleError, setDetalleError] = useState(null);
+  const [filtroSentimiento, setFiltroSentimiento] = useState({ valor: '', mod: '' });
 
   const cargarCambios = useCallback(async () => {
     setCargandoCambios(true);
@@ -236,28 +240,38 @@ export default function Bitacoras() {
     try {
       const cabResp = await apiGet(`/api/preprocesar/ejecuciones/${id}`);
       setCabecera(cabResp.data ?? null);
-      await Promise.all(ENDPOINTS.map((ep) => cargarOutputPage(ep, id, 1)));
+      await Promise.all(
+        ENDPOINTS.map((ep) =>
+          cargarOutputPage(ep, id, 1, ep === 'mensajes-limpios' ? filtroSentimiento.valor : '', ep === 'mensajes-limpios' ? filtroSentimiento.mod : ''),
+        ),
+      );
     } catch (err) {
       setDetalleError(err.message);
       setCabecera(null);
     } finally {
       setDetalleCargando(false);
     }
-  }, []);
+  }, [filtroSentimiento]);
 
   useEffect(() => {
     if (detalleId) cargarDetalle(detalleId);
   }, [detalleId, cargarDetalle]);
 
-  const cargarOutputPage = async (endpoint, idEjecucion, pagina) => {
+  const cargarOutputPage = async (endpoint, idEjecucion, pagina, sentimientoValor = '', sentimientoMod = '') => {
     setOutputs((prev) => ({
       ...prev,
       [endpoint]: { ...prev[endpoint], cargando: true },
     }));
     try {
-      const resp = await apiGet(
-        `/api/preprocesar/${endpoint}?ejecucion=${encodeURIComponent(String(idEjecucion))}&limit=${PAGE_SIZE}&offset=${(pagina - 1) * PAGE_SIZE}`,
-      );
+      const qs = new URLSearchParams();
+      qs.set('ejecucion', String(idEjecucion));
+      qs.set('limit', PAGE_SIZE);
+      qs.set('offset', (pagina - 1) * PAGE_SIZE);
+      if (endpoint === 'mensajes-limpios' && sentimientoValor && (sentimientoMod === 'tiene' || sentimientoMod === 'no_tiene')) {
+        qs.set('sentimiento_dominante', sentimientoValor);
+        qs.set('sentimiento_mod', sentimientoMod);
+      }
+      const resp = await apiGet(`/api/preprocesar/${endpoint}?${qs.toString()}`);
       const filas = resp.data ?? [];
       setOutputs((prev) => ({
         ...prev,
@@ -290,7 +304,7 @@ export default function Bitacoras() {
       ...prev,
       [endpoint]: { ...prev[endpoint], pagina, cargando: true },
     }));
-    cargarOutputPage(endpoint, detalleId, pagina);
+    cargarOutputPage(endpoint, detalleId, pagina, filtroSentimiento.valor, filtroSentimiento.mod);
   };
 
   const filasRendererOutput = (endpoint) => (f, i) => {
@@ -367,14 +381,49 @@ export default function Bitacoras() {
         {estado?.error && <div className="estado-error">{estado.error}</div>}
         {!estado?.error && filas.length === 0 && <p className="placeholder">Sin registros para mostrar.</p>}
         {!estado?.error && filas.length > 0 && (
-          <TablaPaginada
-            filas={filas}
-            cabeceras={cabeceras}
-            filasRenderer={filasRendererOutput(endpoint)}
-            clave={endpoint}
-            pagina={pagina}
-            setPagina={(p) => irPaginaOutput(endpoint, p)}
-          />
+          <>
+            {endpoint === 'mensajes-limpios' ? (
+              <div className="tarjetas-mensajes">
+                {filas.map((f) => (
+                  <div key={f.id} className="tarjeta-mensaje">
+                    <div className="tarjeta-cabecera">
+                      <span className="tarjeta-id">{texto(f.id_mensaje)}</span>
+                      <span className="tarjeta-fecha">{texto(f.fecha)}</span>
+                    </div>
+                    <div className="tarjeta-cuerpo">
+                      {f.autor && <div className="tarjeta-dato"><strong>Autor:</strong> {texto(f.autor)}</div>}
+                      {f.tipo_contenido && <div className="tarjeta-dato"><strong>Tipo:</strong> {texto(f.tipo_contenido)}</div>}
+                      {f.polaridad_msg && <div className="tarjeta-dato"><strong>Polaridad:</strong> {texto(f.polaridad_msg)}</div>}
+                      {f.sentimiento_dominante && (
+                        <div className="tarjeta-dato"><strong>Sentimiento dominante:</strong> {texto(f.sentimiento_dominante)}</div>
+                      )}
+                      {f.texto_limpio && (
+                        <div className="tarjeta-texto">{texto(f.texto_limpio)}</div>
+                      )}
+                    </div>
+                    {f.datos && typeof f.datos === 'object' && !Array.isArray(f.datos) && (
+                      <div className="tarjeta-datos">
+                        {Object.entries(f.datos).map(([k, v]) => (
+                          <div key={k} className="tarjeta-dinamico"><strong>{k}:</strong> {texto(v)}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <TablaPaginada
+                filas={filas}
+                total={total}
+                cabeceras={cabeceras}
+                filasRenderer={filasRendererOutput(endpoint)}
+                clave={endpoint}
+                pagina={pagina}
+                setPagina={(p) => irPaginaOutput(endpoint, p)}
+                serverPaginada
+              />
+            )}
+          </>
         )}
       </>
     );
@@ -401,10 +450,9 @@ export default function Bitacoras() {
 
   const renderEjecuciones = () => {
     const filasFiltradas = filtrarPorFechas(ejecuciones, 'fecha', filtros.fechaDesde, filtros.fechaHasta);
-    const totalPaginas = Math.max(1, Math.ceil(filasFiltradas.length / PAGE_SIZE));
+    const totalPaginas = Math.max(1, Math.ceil(totalEjecuciones / PAGE_SIZE));
     const p = Math.min(Math.max(1, paginaEjecuciones), totalPaginas);
-    const inicio = (p - 1) * PAGE_SIZE;
-    const pageRows = filasFiltradas.slice(inicio, inicio + PAGE_SIZE);
+    const pageRows = filasFiltradas;
 
     return (
       <>
@@ -494,7 +542,7 @@ export default function Bitacoras() {
             </table>
           </div>
         )}
-        {!errorEjecuciones && !cargandoEjecuciones && ejecuciones.length > 0 && filasFiltradas.length > PAGE_SIZE && (
+        {!errorEjecuciones && !cargandoEjecuciones && ejecuciones.length > 0 && totalEjecuciones > PAGE_SIZE && (
           <div className="paginacion">
             <button
               type="button"
@@ -504,7 +552,7 @@ export default function Bitacoras() {
             >
               Anterior
             </button>
-            <span className="pagina-actual">Página {p} de {totalPaginas} · {ejecuciones.length} registros</span>
+            <span className="pagina-actual">Página {p} de {totalPaginas} · {totalEjecuciones} registros</span>
             <button
               type="button"
               className="btn-pag"
@@ -572,6 +620,55 @@ export default function Bitacoras() {
             )}
           </>
         )}
+        <div className="filtros-fechas" style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.76rem', fontWeight: 600, color: '#5a7392' }}>
+            Filtrar mensajes por sentimiento dominante
+            <select
+              value={filtroSentimiento.valor}
+              onChange={(e) => setFiltroSentimiento({ valor: e.target.value, mod: filtroSentimiento.mod || 'tiene' })}
+            >
+              <option value="">(ninguno)</option>
+              <option value="alegria">alegría</option>
+              <option value="enojo">enojo</option>
+              <option value="tristeza">tristeza</option>
+              <option value="miedo">miedo</option>
+              <option value="sorpresa">sorpresa</option>
+              <option value="repugnancia">repugnancia</option>
+              <option value="neutral">neutral</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setFiltroSentimiento((prev) => ({ ...prev, mod: 'tiene' }))}
+            disabled={!filtroSentimiento.valor}
+            style={{ marginRight: '0.5rem', padding: '0.35rem 0.9rem', fontSize: '0.85rem' }}
+          >
+            Tiene
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setFiltroSentimiento((prev) => ({ ...prev, mod: 'no_tiene' }))}
+            disabled={!filtroSentimiento.valor}
+            style={{ padding: '0.35rem 0.9rem', fontSize: '0.85rem' }}
+          >
+            No tiene
+          </button>
+          {filtroSentimiento.valor && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setFiltroSentimiento({ valor: '', mod: '' })}
+              style={{ marginLeft: '0.5rem', padding: '0.35rem 0.9rem', fontSize: '0.85rem', background: 'var(--panel)', color: 'var(--texto-suave)' }}
+            >
+              Limpiar
+            </button>
+          )}
+          <span style={{ marginLeft: '1rem', fontSize: '0.8rem', color: '#5a7392' }}>
+            Filtro activo: {filtroSentimiento.valor ? `${filtroSentimiento.valor} → ${filtroSentimiento.mod === 'tiene' ? 'tiene' : 'no tiene'}` : 'ninguno'}
+          </span>
+        </div>
         <h3 style={{ margin: '1.2rem 0 0.5rem', fontSize: '1rem', color: '#12263f' }}>Outputs</h3>
         {ENDPOINTS.map((endpoint) => (
           <Panel

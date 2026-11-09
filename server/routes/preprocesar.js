@@ -244,7 +244,8 @@ router.get('/ejecuciones/:id', async (req, res, next) => {
   }
 });
 
-/** GET /api/preprocesar/:output?ejecucion=<id>&limit=&offset= — output paginado. */
+/** GET /api/preprocesar/:output?ejecucion=<id>&limit=&offset=&sentimiento_dominante=&sentimiento_mod= — output paginado.
+ * sentimiento_mod: 'tiene' (sentimiento_dominante = valor) o 'no_tiene' (<> valor o NULL). Solo mensajes-limpios. */
 router.get('/:output', async (req, res, next) => {
   const { output } = req.params;
   const cfg = OUTPUTS[output];
@@ -258,19 +259,36 @@ router.get('/:output', async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, LIMIT_MAX);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
+    const where = [];
+    const params = [idEjecucion];
+
+    const sd = String(req.query.sentimiento_dominante ?? '').trim();
+    const sdMod = String(req.query.sentimiento_mod ?? '').trim();
+    if (output === 'mensajes-limpios' && sd && (sdMod === 'tiene' || sdMod === 'no_tiene')) {
+      params.push(sd);
+      const p = `$${params.length}`;
+      if (sdMod === 'tiene') {
+        where.push(`sentimiento_dominante = ${p}`);
+      } else {
+        where.push(`(sentimiento_dominante IS NULL OR sentimiento_dominante <> ${p})`);
+      }
+    }
+
+    const whereSql = where.length ? `AND ${where.join(' AND ')}` : '';
+
     const cols = ['id', ...cfg.columnas].join(', ');
     const total = await query(
-      `SELECT count(*)::int AS total FROM public.${cfg.tabla} WHERE id_ejecucion = $1`,
-      [idEjecucion]
+      `SELECT count(*)::int AS total FROM public.${cfg.tabla} WHERE id_ejecucion = $1 ${whereSql}`,
+      params
     );
 
     const filas = await query(
       `SELECT ${cols}
        FROM public.${cfg.tabla}
-       WHERE id_ejecucion = $1
+       WHERE id_ejecucion = $1 ${whereSql}
        ORDER BY id DESC
-       LIMIT $2 OFFSET $3`,
-      [idEjecucion, limit, offset]
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
     );
 
     res.set('Cache-Control', 'no-store');
