@@ -7,7 +7,7 @@
  */
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
-const urlApi = (path) => {
+export const urlApi = (path) => {
   if (!API_BASE) return path;
   return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 };
@@ -78,3 +78,7 @@ export function eliminarDiccionario(tipo, id) {
   return apiDelete(`/api/diccionarios/${tipo}/${id}`);
 }
 
+export async function listarTiposDiccionarios() {
+  const res = await apiGet('/api/diccionarios');
+  return res.tipos ?? [];
+}

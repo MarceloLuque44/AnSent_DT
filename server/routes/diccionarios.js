@@ -156,6 +156,21 @@ router.get('/:tipo/:id', async (req, res, next) => {
   }
 });
 
+/** Convierte campos que son arrays (jsonb en Postgres) a string JSON valido.
+ *  httr2 desde R ya envía JSON serializado, pero por seguridad garantizamos
+ *  que palabras/raices lleguen como texto con corchetes [] y no como objetos {}. */
+const normalizarParametros = (s, b) => {
+  return s.columnas.map((c) => normalizarUno(b[c]));
+};
+
+/** Convierte un valor individual a texto JSON valido si es array u objeto.
+ *  Evita que Postgres reciba {"a","b"} en lugar de ["a","b"] en columnas jsonb. */
+const normalizarUno = (v) => {
+  if (Array.isArray(v)) return JSON.stringify(v);
+  if (v !== null && v !== undefined && typeof v === 'object') return JSON.stringify(v);
+  return v;
+};
+
 /** POST /api/diccionarios/:tipo — insertar fila */
 router.post('/:tipo', requireApiKey, async (req, res, next) => {
   console.log(`[diccionarios] POST /api/diccionarios/${req.params.tipo}`, JSON.stringify(req.body ?? {}));
@@ -173,7 +188,7 @@ router.post('/:tipo', requireApiKey, async (req, res, next) => {
     }
 
     const cols = s.columnas;
-    const params = cols.map((c) => b[c]);
+    const params = normalizarParametros(s, b);
     const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
 
     const result = await query(
@@ -208,7 +223,7 @@ router.put('/:tipo/:id', requireApiKey, async (req, res, next) => {
     for (const c of s.columnas) {
       if (c in b) {
         sets.push(`${c} = $${i}`);
-        params.push(b[c]);
+        params.push(normalizarUno(b[c]));
         i++;
       }
     }

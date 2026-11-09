@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   listarDiccionario,
+  listarTiposDiccionarios,
   obtenerDiccionario,
   guardarDiccionario,
   actualizarDiccionario,
@@ -41,12 +42,7 @@ export default function Configuracion() {
 
   const cargarTipos = useCallback(async () => {
     try {
-      const resp = await (async () => {
-        const res = await fetch(`/api/diccionarios`);
-        if (!res.ok) throw new Error(`Error ${res.status}`);
-        return res.json();
-      })();
-      const lista = resp.tipos ?? [];
+      const lista = await listarTiposDiccionarios();
       setTipos(lista);
       if (!tipoActivo && lista.length) setTipoActivo(lista[0].tipo);
     } catch (err) {
@@ -84,7 +80,7 @@ export default function Configuracion() {
   const tipoSeleccionado = TIPO_POR_ID[tipoActivo] ?? null;
 
   const iniciarNuevo = () => {
-    setEditando(null);
+    setEditando({ id: null, datos: {} });
     setDatosForm({});
     setErrorForm(null);
   };
@@ -107,12 +103,13 @@ export default function Configuracion() {
     try {
       const payload = { ...datosForm };
       // Las columnas jsonb se envían como arrays/objetos; las demás como strings.
-      if (editando) {
+      if (editando?.id) {
         await actualizarDiccionario(tipoActivo, editando.id, payload);
         setEditando(null);
         setDatosForm({});
       } else {
         await guardarDiccionario(tipoActivo, payload);
+        setEditando(null);
         setDatosForm({});
       }
       await cargarFilas(tipoActivo);
@@ -216,11 +213,14 @@ export default function Configuracion() {
               onChange={(e) => setTipoActivo(e.target.value)}
               style={{ minWidth: '220px' }}
             >
-              {tipos.map((t) => (
-                <option key={t.tipo} value={t.tipo}>
-                  {t.etiqueta} ({t.descripcion})
-                </option>
-              ))}
+              {tipos.map((t) => {
+                const info = TIPO_POR_ID[t.tipo] ?? {};
+                return (
+                  <option key={t.tipo} value={t.tipo}>
+                    {info.etiqueta ?? t.tipo} ({info.descripcion ?? ''})
+                  </option>
+                );
+              })}
             </select>
             <button
               type="button"
