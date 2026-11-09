@@ -236,78 +236,121 @@ export default function Configuracion() {
           {errorForm && <div className="estado-error">{errorForm}</div>}
 
           {editando && (
-            <section style={{ border: '1px solid var(--panel-borde)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem', background: 'var(--panel)' }}>
-              <div style={{ marginBottom: '0.8rem' }}>
-                <span style={{ fontWeight: 600, color: '#5a7392', fontSize: '0.85rem' }}>
-                  {editando.id ? 'Editar fila #' : 'Nueva fila'} de {tipoSeleccionado?.etiqueta}
-                </span>
-              </div>
-              <form onSubmit={guardarForm} className="form-paso" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.7rem' }}>
-                {columnas.map((c) => (
-                  <div key={c} className="campo campo-ancho">
-                    <label className="campo-label" htmlFor={`form-${c}`}>{c}</label>
-                    <div>{renderInput(c)}</div>
+            <>
+              <div
+                className="modal-overlay"
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.45)',
+                  zIndex: 50,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'flex-end',
+                  paddingTop: '6rem',
+                  paddingRight: '12rem',
+                }}
+                onClick={cancelarForm}
+              >
+                <section
+                  style={{
+                    position: 'relative',
+                    width: 'min(90vw, 520px)',
+                    maxHeight: '85vh',
+                    overflowY: 'auto',
+                    border: '1px solid var(--panel-borde)',
+                    borderRadius: '10px',
+                    padding: '1.2rem',
+                    background: 'var(--panel)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={cancelarForm}
+                    style={{
+                      position: 'absolute',
+                      top: '0.5rem',
+                      right: '0.7rem',
+                      padding: '0.15rem 0.6rem',
+                      fontSize: '1.1rem',
+                      lineHeight: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#5a7392',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ✕
+                  </button>
+                  <div style={{ marginBottom: '0.8rem' }}>
+                    <span style={{ fontWeight: 600, color: '#5a7392', fontSize: '0.85rem' }}>
+                      {editando.id ? 'Editar fila #' : 'Nueva fila'} de {tipoSeleccionado?.etiqueta}
+                    </span>
                   </div>
-                ))}
-                <div className="campo campo-ancho" style={{ gridColumn: 'span 2' }}>
-                  <button type="submit" className="btn btn-ejecutar" disabled={guardando}>
-                    {guardando ? 'Guardando…' : editando.id ? 'Guardar cambios' : 'Crear fila'}
-                  </button>
-                  <button type="button" className="btn" onClick={cancelarForm} style={{ marginLeft: '0.5rem' }}>
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            </section>
+                  <form onSubmit={guardarForm} className="form-paso" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem' }}>
+                    {columnas.map((c) => (
+                      <div key={c} className="campo campo-ancho">
+                        <label className="campo-label" htmlFor={`form-${c}`}>{c}</label>
+                        <div>{renderInput(c)}</div>
+                      </div>
+                    ))}
+                    <div className="campo campo-ancho" style={{ display: 'flex', gap: '0.6rem', marginTop: '0.4rem' }}>
+                      <button type="submit" className="btn btn-ejecutar" disabled={guardando}>
+                        {guardando ? 'Guardando…' : editando.id ? 'Guardar cambios' : 'Crear fila'}
+                      </button>
+                      <button type="button" className="btn" onClick={cancelarForm}>
+                        Cerrar
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </>
           )}
 
           {!cargando && !error && columnas.length > 0 && (
             <>
               {filasVacias && <p className="placeholder">No hay filas para mostrar en este diccionario.</p>}
               {filas.length > 0 && (
-                <div className="tabla-scroll">
-                  <table className="tabla">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        {columnas.map((c) => <th key={c}>{c}</th>)}
-                        <th style={{ width: '150px' }}>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filas.map((f) => (
-                        <tr key={f.id}>
-                          <td>{texto(f.id)}</td>
-                          {columnas.map((c) => {
-                            const v = f[c];
-                            return (
-                              <td key={c} title={texto(v)}>
-                                {esArrayJson(c) && Array.isArray(v) ? `[${v.length}]` : texto(v)}
-                              </td>
-                            );
-                          })}
-                          <td>
-                            <button
-                              type="button"
-                              className="btn"
-                              onClick={() => iniciarEdicion(f)}
-                              style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem', marginRight: '0.3rem' }}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              className="btn"
-                              onClick={() => eliminarFila(f.id)}
-                              style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
-                            >
-                              Eliminar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="tarjetas-diccionario" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                  {filas.map((f) => (
+                    <div key={f.id} style={{ border: '1px solid var(--panel-borde)', borderRadius: '8px', padding: '1rem', background: 'var(--panel)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                        <span style={{ fontWeight: 600, color: '#5a7392', fontSize: '0.85rem' }}>ID #{texto(f.id)}</span>
+                        <div style={{ display: 'flex', gap: '0.3rem' }}>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => iniciarEdicion(f)}
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => eliminarFila(f.id)}
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                      {columnas.map((c) => {
+                        const v = f[c];
+                        const mostrar = esArrayJson(c) && Array.isArray(v) ? `[${v.length} elementos]` : texto(v);
+                        return (
+                          <div key={c} style={{ marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#5a7392', display: 'block', marginBottom: '0.15rem' }}>{c}</span>
+                            <span style={{ wordBreak: 'break-all' }}>{mostrar}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               )}
             </>
