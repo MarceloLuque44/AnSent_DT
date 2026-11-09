@@ -389,7 +389,7 @@ export default function Bitacoras() {
           type="button"
           className="btn-pag"
           disabled={p === 1 || filas.length === 0}
-          onClick={() => irPaginaOutput(endpoint, p - 1)}
+          onClick={(e) => { e.stopPropagation(); irPaginaOutput(endpoint, p - 1); }}
           style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
         >
           Anterior
@@ -401,8 +401,32 @@ export default function Bitacoras() {
           type="button"
           className="btn-pag"
           disabled={p === totalPaginas || filas.length === 0}
-          onClick={() => irPaginaOutput(endpoint, p + 1)}
+          onClick={(e) => { e.stopPropagation(); irPaginaOutput(endpoint, p + 1); }}
           style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+        >
+          Siguiente
+        </button>
+      </div>
+    );
+
+    const paginacionTarjetas = (
+      <div className="paginacion" style={{ marginTop: '0.6rem' }}>
+        <button
+          type="button"
+          className="btn-pag"
+          disabled={p === 1 || filas.length === 0}
+          onClick={(e) => { e.stopPropagation(); irPaginaOutput(endpoint, p - 1); }}
+        >
+          Anterior
+        </button>
+        <span className="pagina-actual">
+          Página {p} de {totalPaginas} · {total} registros
+        </span>
+        <button
+          type="button"
+          className="btn-pag"
+          disabled={p === totalPaginas || filas.length === 0}
+          onClick={(e) => { e.stopPropagation(); irPaginaOutput(endpoint, p + 1); }}
         >
           Siguiente
         </button>
@@ -441,6 +465,7 @@ export default function Bitacoras() {
                 titulo={TITULO_OUTPUT[endpoint]}
                 abierto={abierto}
                 alternar={alternarPanel}
+                acciones={paginacionTitulo}
               >
                 <div className="tarjetas-mensajes">
                   {filas.map((f) => (
@@ -470,6 +495,7 @@ export default function Bitacoras() {
                     </div>
                   ))}
                 </div>
+                {total > PAGE_SIZE && paginacionTarjetas}
               </Panel>
             ) : (
               <Panel
