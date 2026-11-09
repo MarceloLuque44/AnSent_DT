@@ -2207,6 +2207,7 @@ select:focus {
   border: 1px solid var(--panel-borde);
   border-radius: var(--radio);
   padding: 1.1rem 1.2rem;
+  margin-top: 1.2rem;
   box-shadow: var(--sombra-1);
 }
 

@@ -12,6 +12,24 @@ const COLORES_TIEMPO = [
 
 const formatearPct = (valor) => `${Number(valor).toFixed(1)}%`;
 
+/** "frustracion_cansancio" -> "Frustracion cansancio" (solo presentación). */
+const etiquetaSentimiento = (s) =>
+  String(s)
+    .replace(/_/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase());
+
+/**
+ * Máximo de eje "redondo" con margen extra para que las etiquetas de las
+ * barras quepan dentro del gráfico, incluso cuando los valores son pequeños.
+ */
+const ejeConMargen = (valores, factor = 1.25) => {
+  const numeros = valores.map(Number).filter((v) => Number.isFinite(v) && v > 0);
+  if (!numeros.length) return 1;
+  const objetivo = Math.max(...numeros) * factor;
+  const magnitud = 10 ** Math.floor(Math.log10(objetivo));
+  return Math.ceil(objetivo / magnitud) * magnitud;
+};
+
 const estiloTexto = {
   color: '#12263f',
   fontFamily: 'Archivo, Public Sans, sans-serif',
@@ -32,8 +50,8 @@ const opcionBase = (titulo, subtext) => ({
     textStyle: { ...estiloTexto, fontSize: 16, fontWeight: 600 },
     subtextStyle: estiloSubtexto,
   },
-  tooltip: { trigger: 'axis' },
-  grid: { left: 90, right: 60, top: 70, bottom: 50 },
+  tooltip: { trigger: 'axis', confine: true },
+  grid: { left: 10, right: 24, top: 70, bottom: 50, containLabel: true },
 });
 
 /**
@@ -249,6 +267,7 @@ export default function Dashboard() {
   const opcion = useMemo(() => {
     const sentimientos = datos.map((d) => d.sentimiento);
     const valores = datos.map((d) => Number(d.nivel_pct));
+    const ejeMax = ejeConMargen(valores);
 
     return {
       backgroundColor: 'transparent',
@@ -267,12 +286,13 @@ export default function Dashboard() {
       },
       tooltip: {
         trigger: 'axis',
+        confine: true,
         axisPointer: { type: 'shadow' },
         formatter: (params) => {
           const p = params[0];
           const fila = datos.find((d) => d.sentimiento === p.name) ?? {};
           return [
-            `<b>${p.name}</b>`,
+            `<b>${etiquetaSentimiento(p.name)}</b>`,
             `Nivel: ${formatearPct(p.value)}`,
             fila.mensajes_pct != null
               ? `Mensajes con el sentimiento: ${formatearPct(fila.mensajes_pct)}`
@@ -283,9 +303,11 @@ export default function Dashboard() {
             .join('<br/>');
         },
       },
-      grid: { left: 130, right: 70, top: 72, bottom: 34 },
+      grid: { left: 8, right: 20, top: 76, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: '% (promedio por mensaje)',
         nameTextStyle: { color: '#5a7392', fontSize: 11 },
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
@@ -297,7 +319,10 @@ export default function Dashboard() {
         data: sentimientos,
         axisTick: { show: false },
         axisLine: { lineStyle: { color: '#d8e6f7' } },
-        axisLabel: { color: '#12263f' },
+        axisLabel: {
+          color: '#12263f',
+          formatter: (v) => etiquetaSentimiento(v),
+        },
       },
       series: [
         {
@@ -309,10 +334,13 @@ export default function Dashboard() {
           label: {
             show: true,
             position: 'right',
+            distance: 6,
             formatter: ({ value }) => formatearPct(value),
             color: '#12263f',
+            fontSize: 11,
             fontWeight: 600,
           },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -336,6 +364,7 @@ export default function Dashboard() {
     const sentimientos = [...new Set(datosCmp.map((d) => d.sentimiento))].sort(
       (a, b) => (ordenA.get(a) ?? 999) - (ordenA.get(b) ?? 999)
     );
+    const ejeMax = ejeConMargen(datosCmp.map((d) => d.nivel_pct));
 
     const colores = [AZUL_BARRAS, AZUL_BARRAS_B];
 
@@ -346,7 +375,7 @@ export default function Dashboard() {
         const fila = indice.get(`${s}||${p.nombre}`);
         return fila ? Number(fila.nivel_pct) : null;
       }),
-      barMaxWidth: 18,
+      barMaxWidth: 16,
       barGap: '10%',
       itemStyle: {
         color: colores[i % colores.length],
@@ -355,10 +384,12 @@ export default function Dashboard() {
       label: {
         show: true,
         position: 'right',
+        distance: 5,
         formatter: ({ value }) => (value == null ? '' : formatearPct(value)),
         color: '#12263f',
         fontSize: 10,
       },
+      labelLayout: { hideOverlap: true },
     }));
 
     const opcionCmp = {
@@ -378,6 +409,7 @@ export default function Dashboard() {
       },
       tooltip: {
         trigger: 'axis',
+        confine: true,
         axisPointer: { type: 'shadow' },
         formatter: (params) => {
           const lineas = params.map((p) => {
@@ -388,7 +420,7 @@ export default function Dashboard() {
                 : '';
             return `${p.marker} ${p.seriesName}: ${formatearPct(p.value)}${extra}`;
           });
-          return [`<b>${params[0]?.name ?? ''}</b>`, ...lineas].join('<br/>');
+          return [`<b>${etiquetaSentimiento(params[0]?.name ?? '')}</b>`, ...lineas].join('<br/>');
         },
       },
       legend: {
@@ -396,9 +428,11 @@ export default function Dashboard() {
         data: periodosCmp.map((p) => p.nombre),
         textStyle: { color: '#5a7392' },
       },
-      grid: { left: 130, right: 80, top: 72, bottom: 78 },
+      grid: { left: 8, right: 22, top: 76, bottom: 74, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: '% (promedio por mensaje)',
         nameTextStyle: { color: '#5a7392', fontSize: 11 },
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
@@ -410,7 +444,10 @@ export default function Dashboard() {
         data: sentimientos,
         axisTick: { show: false },
         axisLine: { lineStyle: { color: '#d8e6f7' } },
-        axisLabel: { color: '#12263f' },
+        axisLabel: {
+          color: '#12263f',
+          formatter: (v) => etiquetaSentimiento(v),
+        },
       },
       series,
     };
@@ -428,7 +465,18 @@ export default function Dashboard() {
 
     return {
       ...opcionBase('Evolución de los sentimientos en el tiempo', periodoSerie?.nombre ? `Periodo: ${periodoSerie.nombre}` : undefined),
-      legend: { bottom: 0, data: sentimientos, textStyle: { color: '#5a7392' } },
+      legend: {
+        type: 'scroll',
+        orient: 'vertical',
+        right: 0,
+        top: 'middle',
+        data: sentimientos,
+        itemWidth: 9,
+        itemHeight: 9,
+        textStyle: { color: '#5a7392', fontSize: 9 },
+        formatter: (name) => etiquetaSentimiento(name),
+      },
+      grid: { left: 8, right: 140, top: 70, bottom: 40, containLabel: true },
       xAxis: {
         type: 'category',
         data: meses,
@@ -465,7 +513,18 @@ export default function Dashboard() {
 
     return {
       ...opcionBase('Composición de los sentimientos en el tiempo', periodoSerie?.nombre ? `Periodo: ${periodoSerie.nombre}` : undefined),
-      legend: { bottom: 0, data: sentimientos, textStyle: { color: '#5a7392' } },
+      legend: {
+        type: 'scroll',
+        orient: 'vertical',
+        right: 0,
+        top: 'middle',
+        data: sentimientos,
+        itemWidth: 9,
+        itemHeight: 9,
+        textStyle: { color: '#5a7392', fontSize: 9 },
+        formatter: (name) => etiquetaSentimiento(name),
+      },
+      grid: { left: 8, right: 140, top: 70, bottom: 40, containLabel: true },
       xAxis: {
         type: 'category',
         data: meses,
@@ -498,24 +557,43 @@ export default function Dashboard() {
     if (!datos.length) return null;
     const sentimientos = datos.map((d) => d.sentimiento);
     const valores = datos.map((d) => Number(d.nivel_pct));
+    const radioMax = ejeConMargen(valores);
     return {
       ...opcionBase('Sentimientos en coordenadas polares', periodo?.nombre ? `Periodo: ${periodo.nombre}` : undefined),
-      tooltip: { trigger: 'item', formatter: (params) => `${params.name}: ${formatearPct(params.value)}` },
+      tooltip: { trigger: 'item', confine: true, formatter: (params) => `${etiquetaSentimiento(params.name)}: ${formatearPct(params.value)}` },
       angleAxis: {
         type: 'category',
         data: sentimientos,
-        axisLabel: { color: '#12263f', fontSize: 11 },
+        axisLabel: {
+          color: '#12263f',
+          fontSize: 9,
+          formatter: (v) => etiquetaSentimiento(v),
+        },
       },
-      radiusAxis: { type: 'value', axisLabel: { color: '#5a7392', fontSize: 10 } },
-      polar: { center: ['50%', '55%'], radius: '70%' },
+      radiusAxis: {
+        type: 'value',
+        min: 0,
+        max: radioMax,
+        axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392', fontSize: 9 },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      polar: { center: ['50%', '54%'], radius: '62%' },
       series: [
         {
           type: 'bar',
           data: valores,
           coordinateSystem: 'polar',
-          barWidth: 24,
+          barWidth: 20,
           itemStyle: { color: AZUL_BARRAS },
-          label: { show: true, position: 'outside', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+          label: {
+            show: true,
+            position: 'outside',
+            distance: 2,
+            formatter: ({ value }) => formatearPct(value),
+            color: '#12263f',
+            fontSize: 9,
+          },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -528,6 +606,22 @@ export default function Dashboard() {
     const sentimientos = [...new Set(datosCmp.map((d) => d.sentimiento))];
     const indice = new Map(datosCmp.map((d) => [`${d.sentimiento}||${d.periodo}`, d]));
     const colores = [AZUL_BARRAS, AZUL_BARRAS_B];
+
+    // Máximo propio de cada eje: si todos los niveles son pequeños, el radar
+    // sigue siendo visible (antes se fijaba max=1 y quedaba casi plano).
+    const indicadores = sentimientos.map((s) => {
+      const maxSent = Math.max(
+        0,
+        ...datosCmp
+          .filter((d) => d.sentimiento === s)
+          .map((d) => Number(d.nivel_pct))
+      );
+      return {
+        name: etiquetaSentimiento(s),
+        max: Math.max(0.01, (maxSent * 1.25) / 100),
+      };
+    });
+
     return {
       backgroundColor: 'transparent',
       title: {
@@ -538,10 +632,15 @@ export default function Dashboard() {
         textStyle: { ...estiloTexto, fontSize: 16, fontWeight: 600 },
         subtextStyle: estiloSubtexto,
       },
-      tooltip: { trigger: 'item' },
+      tooltip: { trigger: 'item', confine: true },
       radar: {
-        indicator: sentimientos.map((s) => ({ name: s, max: 100 })),
-        axisLabel: { color: '#5a7392', fontSize: 10 },
+        indicator: indicadores,
+        center: ['50%', '54%'],
+        radius: '62%',
+        axisName: { color: '#12263f', fontSize: 9 },
+        axisLabel: { color: '#5a7392', fontSize: 9 },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+        splitArea: { areaStyle: { color: ['#ffffff', '#f7fbff'] } },
       },
       legend: {
         bottom: 0,
@@ -553,7 +652,7 @@ export default function Dashboard() {
         type: 'radar',
         data: [
           {
-            value: sentimientos.map((s) => Number((indice.get(`${s}||${p.nombre}`) ?? {}).nivel_pct ?? 0)),
+            value: sentimientos.map((s) => Number((indice.get(`${s}||${p.nombre}`) ?? {}).nivel_pct ?? 0) / 100),
           },
         ],
         itemStyle: { color: colores[i % colores.length] },
@@ -576,26 +675,28 @@ export default function Dashboard() {
       .filter((d) => d.sentimiento === ySent)
       .map((d) => ({ value: [xMap.get(d.anio_mes), Number(d.pct)], name: d.anio_mes }));
 
+    const todosX = datosSerie.filter((d) => d.sentimiento === xSent).map((d) => Number(d.pct));
+    const todosY = datosSerie.filter((d) => d.sentimiento === ySent).map((d) => Number(d.pct));
+    const axisMax = ejeConMargen([...todosX, ...todosY], 1.15);
+
     return {
-      ...opcionBase(`Dispersión: ${xSent} vs ${ySent}`, periodoSerie?.nombre ? `Periodo: ${periodoSerie.nombre}` : undefined),
-      tooltip: { trigger: 'item', formatter: (params) => `${params.name}: ${xSent} ${formatearPct(params.value[0])} · ${ySent} ${formatearPct(params.value[1])}` },
+      ...opcionBase(`Dispersión: ${etiquetaSentimiento(xSent)} vs ${etiquetaSentimiento(ySent)}`, periodoSerie?.nombre ? `Periodo: ${periodoSerie.nombre}` : undefined),
+      tooltip: { trigger: 'item', confine: true, formatter: (params) => `${params.name}: ${xSent} ${formatearPct(params.value[0])} · ${ySent} ${formatearPct(params.value[1])}` },
       xAxis: {
         type: 'value',
-        name: `${xSent} (%)`,
+        name: `${etiquetaSentimiento(xSent)} (%)`,
         nameTextStyle: estiloEje,
-        min: 0,
-        max: 100,
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
         splitLine: { lineStyle: { color: '#e7f0fb' } },
+        max: axisMax,
       },
       yAxis: {
         type: 'value',
-        name: `${ySent} (%)`,
+        name: `${etiquetaSentimiento(ySent)} (%)`,
         nameTextStyle: estiloEje,
-        min: 0,
-        max: 100,
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
         splitLine: { lineStyle: { color: '#e7f0fb' } },
+        max: axisMax,
       },
       series: [
         {
@@ -604,7 +705,8 @@ export default function Dashboard() {
           data,
           symbolSize: 7,
           itemStyle: { color: AZUL_BARRAS },
-          label: { show: true, formatter: ({ name }) => name, color: '#12263f', fontSize: 10 },
+          label: { show: true, formatter: ({ name }) => name, color: '#12263f', fontSize: 9 },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -629,6 +731,11 @@ export default function Dashboard() {
           type: 'sankey',
           data: nodos,
           links: enlaces,
+          left: 10,
+          right: 10,
+          top: 10,
+          bottom: 10,
+          label: { color: '#12263f', fontSize: 10 },
           emphasis: { focus: 'adjacency' },
           nodeAlign: 'justify',
           nodeGap: 10,
@@ -647,17 +754,22 @@ export default function Dashboard() {
       .slice(0, 40);
     const docs = [...new Set(filas.map((f) => f.doc))];
     const colorPorDoc = new Map(docs.map((d, i) => [d, COLORES_TIEMPO[i % COLORES_TIEMPO.length]]));
+    const ejeMax = ejeConMargen(filas.map((f) => f.tf_idf));
     return {
       ...opcionBase('Terminos mas distintivos (TF-IDF)', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
       tooltip: {
         trigger: 'item',
+        confine: true,
         formatter: (p) => {
           const f = filas[p.dataIndex];
           return [`<b>${f.token}</b> — ${f.doc}`, `TF-IDF: ${Number(f.tf_idf).toFixed(3)}`, `n: ${f.n}`, `tf: ${Number(f.tf).toFixed(3)}`, `idf: ${Number(f.idf).toFixed(3)}`].join('<br/>');
         },
       },
+      grid: { left: 8, right: 20, top: 70, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: 'TF-IDF',
         nameTextStyle: estiloEje,
         axisLabel: { color: '#5a7392' },
@@ -667,7 +779,7 @@ export default function Dashboard() {
         type: 'category',
         data: filas.map((f) => `${f.token} — ${f.doc}`),
         inverse: true,
-        axisLabel: { color: '#12263f', fontSize: 10 },
+        axisLabel: { color: '#12263f', fontSize: 9, width: 210, overflow: 'truncate' },
         axisTick: { show: false },
       },
       series: [
@@ -679,7 +791,8 @@ export default function Dashboard() {
             itemStyle: { color: colorPorDoc.get(f.doc) },
           })),
           barMaxWidth: 20,
-          label: { show: true, position: 'right', formatter: ({ value }) => value.toFixed(3), color: '#12263f', fontSize: 9 },
+          label: { show: true, position: 'right', distance: 4, formatter: ({ value }) => value.toFixed(3), color: '#12263f', fontSize: 9 },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -693,17 +806,22 @@ export default function Dashboard() {
       .slice(0, 40);
     const topicos = [...new Set(filas.map((f) => f.topico))];
     const colorPorTopico = new Map(topicos.map((t, i) => [t, COLORES_TIEMPO[i % COLORES_TIEMPO.length]]));
+    const ejeMax = ejeConMargen(filas.map((f) => f.beta));
     return {
       ...opcionBase('Topicos (LDA): terminos mas probables', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
       tooltip: {
         trigger: 'item',
+        confine: true,
         formatter: (p) => {
           const f = filas[p.dataIndex];
           return [`<b>${f.termino}</b> — ${f.topico}: ${f.etiqueta}`, `beta: ${Number(f.beta).toFixed(4)}`].join('<br/>');
         },
       },
+      grid: { left: 8, right: 20, top: 70, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: 'beta (probabilidad)',
         nameTextStyle: estiloEje,
         axisLabel: { formatter: (v) => v.toFixed(4), color: '#5a7392' },
@@ -713,7 +831,7 @@ export default function Dashboard() {
         type: 'category',
         data: filas.map((f) => `${f.termino} — ${f.topico}: ${f.etiqueta}`),
         inverse: true,
-        axisLabel: { color: '#12263f', fontSize: 10 },
+        axisLabel: { color: '#12263f', fontSize: 9, width: 210, overflow: 'truncate' },
         axisTick: { show: false },
       },
       series: [
@@ -725,7 +843,8 @@ export default function Dashboard() {
             itemStyle: { color: colorPorTopico.get(f.topico) },
           })),
           barMaxWidth: 20,
-          label: { show: true, position: 'right', formatter: ({ value }) => value.toFixed(3), color: '#12263f', fontSize: 9 },
+          label: { show: true, position: 'right', distance: 4, formatter: ({ value }) => value.toFixed(4), color: '#12263f', fontSize: 9 },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -740,11 +859,19 @@ export default function Dashboard() {
     datosGraficos.topicos_tiempo.forEach((d) => porPanel.get(`${d.topico}: ${d.etiqueta}`).push({ value: [d.anio_mes, Number(d.peso_pct)] }));
     return {
       ...opcionBase('Peso de cada topico por mes', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
-      legend: { bottom: 0, data: paneles, textStyle: { color: '#5a7392' } },
+      legend: {
+        type: 'scroll',
+        bottom: 0,
+        data: paneles,
+        itemWidth: 9,
+        itemHeight: 9,
+        textStyle: { color: '#5a7392', fontSize: 9 },
+      },
+      grid: { left: 8, right: 20, top: 70, bottom: 70, containLabel: true },
       xAxis: {
         type: 'category',
         data: meses,
-        axisLabel: { color: '#5a7392' },
+        axisLabel: { color: '#5a7392', hideOverlap: true },
         axisLine: { lineStyle: { color: '#d8e6f7' } },
         splitLine: { lineStyle: { color: '#e7f0fb' } },
       },
@@ -771,11 +898,15 @@ export default function Dashboard() {
   const opcionUpos = useMemo(() => {
     if (!datosGraficos.upos.length) return null;
     const filas = [...datosGraficos.upos].sort((a, b) => Number(b.pct) - Number(a.pct));
+    const ejeMax = ejeConMargen(filas.map((f) => f.pct));
     return {
       ...opcionBase('Categorias gramaticales (shallow linguistic)', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
-      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${formatearPct(p.value)}` },
+      tooltip: { trigger: 'item', confine: true, formatter: (p) => `${p.name}: ${formatearPct(p.value)}` },
+      grid: { left: 8, right: 20, top: 70, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: '% de las palabras',
         nameTextStyle: estiloEje,
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
@@ -795,7 +926,8 @@ export default function Dashboard() {
           data: filas.map((f) => Number(f.pct)),
           barMaxWidth: 22,
           itemStyle: { color: '#7030A0', borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+          label: { show: true, position: 'right', distance: 5, formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -805,25 +937,31 @@ export default function Dashboard() {
   const opcionNivelMensaje = useMemo(() => {
     if (!datosGraficos.nivel_mensaje.length) return null;
     const sentimientos = datosGraficos.nivel_mensaje.map((d) => d.sentimiento);
+    const ejeMax = ejeConMargen(
+      datosGraficos.nivel_mensaje.flatMap((d) => [d.mensaje_pct, d.periodo_pct])
+    );
     return {
       ...opcionBase('Nivel del mensaje frente a su periodo', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
       tooltip: {
         trigger: 'axis',
+        confine: true,
         axisPointer: { type: 'shadow' },
         formatter: (params) => {
           const p = params[0];
           const f = datosGraficos.nivel_mensaje.find((d) => d.sentimiento === p.name) ?? {};
-          return [`<b>${p.name}</b>`, `Mensaje: ${formatearPct(p.value)}`, `Periodo: ${formatearPct(Number(f.periodo_pct))}`].join('<br/>');
+          return [`<b>${etiquetaSentimiento(p.name)}</b>`, `Mensaje: ${formatearPct(p.value)}`, `Periodo: ${formatearPct(Number(f.periodo_pct))}`].join('<br/>');
         },
       },
-      grid: { left: 130, right: 70, top: 72, bottom: 34 },
+      legend: { bottom: 0, data: ['Mensaje', 'Periodo'], textStyle: { color: '#5a7392' } },
+      grid: { left: 8, right: 20, top: 72, bottom: 64, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: '%',
         nameTextStyle: estiloEje,
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
         splitLine: { lineStyle: { color: '#e7f0fb' } },
-        max: 100,
       },
       yAxis: {
         type: 'category',
@@ -831,24 +969,29 @@ export default function Dashboard() {
         data: sentimientos,
         axisTick: { show: false },
         axisLine: { lineStyle: { color: '#d8e6f7' } },
-        axisLabel: { color: '#12263f' },
+        axisLabel: {
+          color: '#12263f',
+          formatter: (v) => etiquetaSentimiento(v),
+        },
       },
       series: [
         {
           name: 'Mensaje',
           type: 'bar',
           data: datosGraficos.nivel_mensaje.map((d) => Number(d.mensaje_pct)),
-          barMaxWidth: 22,
+          barMaxWidth: 16,
           itemStyle: { color: '#2A9D8F', borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+          label: { show: true, position: 'right', distance: 4, formatter: ({ value }) => formatearPct(value), color: '#12263f', fontSize: 9 },
+          labelLayout: { hideOverlap: true },
         },
         {
           name: 'Periodo',
           type: 'bar',
           data: datosGraficos.nivel_mensaje.map((d) => Number(d.periodo_pct)),
-          barMaxWidth: 22,
+          barMaxWidth: 16,
           itemStyle: { color: '#8E5572', borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+          label: { show: true, position: 'right', distance: 4, formatter: ({ value }) => formatearPct(value), color: '#12263f', fontSize: 9 },
+          labelLayout: { hideOverlap: true },
         },
       ],
     };
@@ -951,7 +1094,7 @@ export default function Dashboard() {
     const porSent = new Map(sentimientos.map((s) => [s, []]));
     datosGraficosAdicionales.evolucion_anual.forEach((d) => porSent.get(d.sentimiento).push({ value: [String(d.anio), Number(d.pct)] }));
     return {
-      ...opcionBase('Evolucion de los sentimientos por ano', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      ...opcionBase('Evolución de los sentimientos por año', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
       legend: { bottom: 0, data: sentimientos, textStyle: { color: '#5a7392' } },
       xAxis: {
         type: 'category',
@@ -1214,11 +1357,15 @@ export default function Dashboard() {
   const opcionPalabras = useMemo(() => {
     if (!datosGraficosAdicionales.palabras.length) return null;
     const filas = [...datosGraficosAdicionales.palabras].sort((a, b) => Number(b.n) - Number(a.n));
+    const ejeMax = ejeConMargen(filas.map((f) => f.n));
     return {
       ...opcionBase('Palabras mas usadas', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
-      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value} veces` },
+      tooltip: { trigger: 'item', confine: true, formatter: (p) => `${p.name}: ${p.value} veces` },
+      grid: { left: 8, right: 20, top: 70, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: 'veces',
         nameTextStyle: estiloEje,
         axisLabel: { color: '#5a7392' },
@@ -1237,7 +1384,8 @@ export default function Dashboard() {
         data: filas.map((f) => Number(f.n)),
         barMaxWidth: 22,
         itemStyle: { color: '#8338EC', borderRadius: [0, 4, 4, 0] },
-        label: { show: true, position: 'right', formatter: ({ value }) => value, color: '#12263f', fontWeight: 600 },
+        label: { show: true, position: 'right', distance: 5, formatter: ({ value }) => value, color: '#12263f', fontWeight: 600 },
+        labelLayout: { hideOverlap: true },
       }],
     };
   }, [datosGraficosAdicionales.palabras, periodoGraficos]);
@@ -1247,11 +1395,15 @@ export default function Dashboard() {
     if (!datosGraficosAdicionales.emojis.length) return null;
     const filas = [...datosGraficosAdicionales.emojis].sort((a, b) => Number(b.n) - Number(a.n));
     const colorPorSent = { positivo: '#2A9D8F', neutral: '#E9C46A', negativo: '#E76F51', 'sin dato': '#9aa5b1' };
+    const ejeMax = ejeConMargen(filas.map((f) => f.n));
     return {
       ...opcionBase('Emojis mas usados y su sentimiento', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
-      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value} veces · ${p.marker ? '' : ''}` },
+      tooltip: { trigger: 'item', confine: true, formatter: (p) => `${p.name}: ${p.value} veces` },
+      grid: { left: 8, right: 20, top: 70, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: 'veces',
         nameTextStyle: estiloEje,
         axisLabel: { color: '#5a7392' },
@@ -1261,7 +1413,7 @@ export default function Dashboard() {
         type: 'category',
         data: filas.map((f) => f.etiqueta || f.emoji),
         inverse: true,
-        axisLabel: { color: '#12263f' },
+        axisLabel: { color: '#12263f', width: 160, overflow: 'truncate' },
         axisTick: { show: false },
       },
       series: [{
@@ -1269,7 +1421,8 @@ export default function Dashboard() {
         type: 'bar',
         data: filas.map((f) => ({ value: Number(f.n), itemStyle: { color: colorPorSent[f.sentimiento] } })),
         barMaxWidth: 22,
-        label: { show: true, position: 'right', formatter: ({ value }) => value, color: '#12263f', fontWeight: 600 },
+        label: { show: true, position: 'right', distance: 5, formatter: ({ value }) => value, color: '#12263f', fontWeight: 600 },
+        labelLayout: { hideOverlap: true },
       }],
     };
   }, [datosGraficosAdicionales.emojis, periodoGraficos]);
@@ -1282,10 +1435,12 @@ export default function Dashboard() {
     const fuentes = ['diccionario propio', 'libreria (syuzhet)'];
     const indice = new Map(filas.map((f, i) => [`${f.polaridad}||${f.fuente}`, i]));
     const colorPorFuente = { 'diccionario propio': '#2E75B6', 'libreria (syuzhet)': '#E76F51' };
+    const ejeMax = ejeConMargen(filas.map((f) => f.pct));
     return {
       ...opcionBase('Polaridad: diccionario propio vs libreria', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      tooltip: { trigger: 'axis', confine: true, axisPointer: { type: 'shadow' } },
       legend: { bottom: 0, data: fuentes, textStyle: { color: '#5a7392' } },
+      grid: { left: 8, right: 20, top: 76, bottom: 56, containLabel: true },
       xAxis: {
         type: 'category',
         data: polaridades,
@@ -1295,6 +1450,8 @@ export default function Dashboard() {
       },
       yAxis: {
         type: 'value',
+        min: 0,
+        max: ejeMax,
         name: '% de mensajes',
         nameTextStyle: estiloEje,
         axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
@@ -1309,8 +1466,9 @@ export default function Dashboard() {
         }),
         barMaxWidth: 22,
         barGap: '10%',
-        itemStyle: { color: colorPorFuente[fuente], borderRadius: [0, 4, 4, 0] },
-        label: { show: true, position: 'top', formatter: ({ value }) => value.toFixed(1) + '%', color: '#12263f', fontSize: 9 },
+        itemStyle: { color: colorPorFuente[fuente], borderRadius: [4, 4, 0, 0] },
+        label: { show: true, position: 'top', distance: 2, formatter: ({ value }) => value.toFixed(1) + '%', color: '#12263f', fontSize: 9 },
+        labelLayout: { hideOverlap: true },
       })),
     };
   }, [datosGraficosAdicionales.libreria_vs_propios, periodoGraficos]);
@@ -1319,11 +1477,15 @@ export default function Dashboard() {
   const opcionDiferencia = useMemo(() => {
     if (!datosGraficosAdicionales.diferencia.length) return null;
     const filas = [...datosGraficosAdicionales.diferencia].sort((a, b) => Number(b.dif) - Number(a.dif));
+    const ejeMax = ejeConMargen(filas.map((f) => Math.abs(Number(f.dif))));
     return {
       ...opcionBase('Diferencia entre dos periodos', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
-      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value > 0 ? '+' : ''}${p.value.toFixed(1)} puntos` },
+      tooltip: { trigger: 'item', confine: true, formatter: (p) => `${etiquetaSentimiento(p.name)}: ${p.value > 0 ? '+' : ''}${p.value.toFixed(1)} puntos` },
+      grid: { left: 8, right: 24, top: 70, bottom: 30, containLabel: true },
       xAxis: {
         type: 'value',
+        min: -ejeMax,
+        max: ejeMax,
         name: 'diferencia (puntos porcentuales)',
         nameTextStyle: estiloEje,
         axisLabel: { formatter: (v) => `${v > 0 ? '+' : ''}${v}`, color: '#5a7392' },
@@ -1333,15 +1495,23 @@ export default function Dashboard() {
         type: 'category',
         data: filas.map((f) => f.sentimiento),
         inverse: true,
-        axisLabel: { color: '#12263f' },
+        axisLabel: { color: '#12263f', formatter: (v) => etiquetaSentimiento(v) },
         axisTick: { show: false },
       },
       series: [{
         name: 'diferencia',
         type: 'bar',
-        data: filas.map((f) => ({ value: Number(f.dif), itemStyle: { color: f.sube ? '#2A9D8F' : '#E76F51' } })),
+        data: filas.map((f) => {
+          const valor = Number(f.dif);
+          return {
+            value: valor,
+            itemStyle: { color: f.sube ? '#2A9D8F' : '#E76F51' },
+            label: { position: valor >= 0 ? 'right' : 'left' },
+          };
+        }),
         barMaxWidth: 22,
-        label: { show: true, position: 'right', formatter: ({ value }) => (value > 0 ? '+' : '') + value.toFixed(1), color: '#12263f', fontWeight: 600 },
+        label: { show: true, distance: 5, formatter: ({ value }) => (value > 0 ? '+' : '') + value.toFixed(1), color: '#12263f', fontWeight: 600 },
+        labelLayout: { hideOverlap: true },
       }],
     };
   }, [datosGraficosAdicionales.diferencia, periodoGraficos]);
@@ -1498,7 +1668,7 @@ export default function Dashboard() {
               <h2 className="panel-grafico-titulo">Terminos mas distintivos (TF-IDF)</h2>
             </div>
             {!cargandoGraficos && !errorGraficos && opcionTfidf && (
-              <EChart option={opcionTfidf} height={520} />
+              <EChart option={opcionTfidf} height={680} />
             )}
             {!cargandoGraficos && !errorGraficos && !opcionTfidf && datosGraficos.tfidf.length === 0 && (
               <p className="placeholder">Sin datos de TF-IDF para este periodo.</p>
@@ -1512,7 +1682,7 @@ export default function Dashboard() {
               <h2 className="panel-grafico-titulo">Topicos (LDA): terminos mas probables</h2>
             </div>
             {!cargandoGraficos && !errorGraficos && opcionTopicos && (
-              <EChart option={opcionTopicos} height={520} />
+              <EChart option={opcionTopicos} height={680} />
             )}
             {!cargandoGraficos && !errorGraficos && !opcionTopicos && datosGraficos.topicos.length === 0 && (
               <p className="placeholder">Sin datos de topicos para este periodo.</p>
@@ -1554,7 +1724,7 @@ export default function Dashboard() {
               <h2 className="panel-grafico-titulo">Nivel del mensaje frente a su periodo</h2>
             </div>
             {!cargandoGraficos && !errorGraficos && opcionNivelMensaje && (
-              <EChart option={opcionNivelMensaje} height={420} />
+              <EChart option={opcionNivelMensaje} height={480} />
             )}
             {!cargandoGraficos && !errorGraficos && !opcionNivelMensaje && datosGraficos.nivel_mensaje.length === 0 && (
               <p className="placeholder">Sin datos de nivel de mensaje para este periodo.</p>
