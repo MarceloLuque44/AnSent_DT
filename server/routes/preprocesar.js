@@ -65,12 +65,14 @@ const OUTPUTS = {
 };
 
 /**
- * Reemplaza todas las filas hijas de un id_ejecucion en una tabla de output
- * (DELETE + INSERT masivo via unnest). `espec` define columnas/tipos; cada
- * fila de `filas` se lee por nombre de columna.
+ * Reemplaza (reset=true) o anexa (reset=false) filas hijas de un id_ejecucion
+ * en una tabla de output. `espec` define columnas/tipos; cada fila de `filas`
+ * se lee por nombre de columna.
  */
-async function reemplazarOutput(idEjecucion, tabla, columnas, tipos, filas) {
-  await query(`DELETE FROM public.${tabla} WHERE id_ejecucion = $1`, [idEjecucion]);
+async function reemplazarOutput(idEjecucion, tabla, columnas, tipos, filas, reset = true) {
+  if (reset) {
+    await query(`DELETE FROM public.${tabla} WHERE id_ejecucion = $1`, [idEjecucion]);
+  }
   if (filas.length === 0) return;
   const cols = columnas.join(', ');
   const params = tipos.map((t, i) => `$${i + 2}::${t}[]`).join(', ');
@@ -284,7 +286,10 @@ router.get('/:output', async (req, res, next) => {
   }
 });
 
-/** POST /api/preprocesar/:output — DELETE WHERE id_ejecucion + INSERT masivo. */
+/** POST /api/preprocesar/:output — DELETE WHERE id_ejecucion + INSERT masivo.
+ * Body: { id_ejecucion, datos, reset?: boolean }
+ * Cuando reset es true se borran las filas previas de la ejecucion antes de insertar;
+ * cuando es false se anexan (para envio por lotes desde R). */
 router.post('/:output', requireApiKey, async (req, res, next) => {
   const { output } = req.params;
   const cfg = OUTPUTS[output];
@@ -304,7 +309,9 @@ router.post('/:output', requireApiKey, async (req, res, next) => {
       return res.status(400).json({ error: `datos no puede tener mas de ${cfg.postMax} filas` });
     }
 
-    await reemplazarOutput(idEjecucion, cfg.tabla, cfg.columnas, cfg.tipos, datos);
+    const reset = body.reset !== false;
+
+    await reemplazarOutput(idEjecucion, cfg.tabla, cfg.columnas, cfg.tipos, datos, reset);
 
     res.status(201).json({ ok: true, id_ejecucion: idEjecucion, filas: datos.length });
   } catch (err) {

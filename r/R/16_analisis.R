@@ -495,7 +495,9 @@ enviar_ejecucion_api <- function(meta) {
 
 # POST de un output de preprocesar() (DELETE WHERE id_ejecucion + INSERT masivo).
 # `datos` puede ser un data.frame o una lista (para el resumen, una fila).
-enviar_output_api <- function(endpoint, id_ejecucion, datos) {
+# Se envia por lotes de 500 filas para evitar cuerpos de request muy grandes:
+# el primer lote lleva reset=TRUE (borra filas previas) y el resto se anexa.
+enviar_output_api <- function(endpoint, id_ejecucion, datos, lote = 500) {
   if (is.null(id_ejecucion) || is.na(id_ejecucion)) {
     message(sprintf("%s: sin id_ejecucion; no se envia a la API.", endpoint))
     return(invisible(NULL))
@@ -523,14 +525,23 @@ enviar_output_api <- function(endpoint, id_ejecucion, datos) {
       v
     })
   })
-  body <- list(id_ejecucion = id_ejecucion, datos = filas)
-  tryCatch(
-    .api_post(sprintf("/api/preprocesar/%s", endpoint), body),
-    error = function(e) {
-      message(sprintf("%s: no se pudieron enviar los datos a la API: %s", endpoint, conditionMessage(e)))
-      invisible(NULL)
-    }
-  )
+  n <- length(filas)
+  lote <- max(1, as.integer(lote))
+  for (i in seq(1, n, by = lote)) {
+    lote_filas <- filas[seq(i, min(i + lote - 1, n))]
+    body <- list(
+      id_ejecucion = id_ejecucion,
+      datos = lote_filas,
+      reset = (i == 1))
+    tryCatch(
+      .api_post(sprintf("/api/preprocesar/%s", endpoint), body),
+      error = function(e) {
+        message(sprintf("%s: no se pudieron enviar los datos a la API (lote %d): %s", endpoint, i, conditionMessage(e)))
+        invisible(NULL)
+      }
+    )
+  }
+  invisible(NULL)
 }
 
 # ------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
-# source("cargar_proyecto.R")              # carga todas las herramientas (una vez)
-# res   <- preprocesar("data/result.json") # UNA vez, con todo el dataset
+source("cargar_proyecto.R")              # carga todas las herramientas (una vez)
+res   <- preprocesar("data/result.json") # UNA vez, con todo el dataset
 # datos <- cargar_datos_analisis("salida") # carga mensajes_limpios.csv y tokens.csv
 # 
 # a <- analizar_periodo(datos, c("2023-01-01", "2023-03-31"))   # un periodo
