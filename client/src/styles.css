@@ -2435,3 +2435,19 @@ select:focus {
   word-break: break-word;
 }
 
+/* Mensajes indicativos de interacción (clic) — verde oscuro */
+.clickable-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #f2fdfb 0%, #e2f9f4 100%);
+  border: 1px solid rgba(15, 169, 154, 0.32);
+  color: #0b7a6d;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.75rem;
+  box-shadow: var(--brillo-interior), 0 6px 14px -12px rgba(15, 169, 154, 0.5);
+}
+

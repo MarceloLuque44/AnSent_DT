@@ -41,7 +41,7 @@ const clavesDinamicas = (filas) => {
 };
 
 /** Panel desplegable (accordion). */
-function Panel({ clave, titulo, abierto, alternar, children }) {
+function Panel({ clave, titulo, abierto, alternar, acciones, children }) {
   return (
     <section className="panel-grafico" aria-label={clave}>
       <div
@@ -53,7 +53,10 @@ function Panel({ clave, titulo, abierto, alternar, children }) {
         aria-expanded={abierto}
         aria-controls={clave}
       >
-        <h2 className="panel-titulo">{titulo}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+          <h2 className="panel-titulo">{titulo}</h2>
+          {acciones}
+        </div>
         <span className="panel-indicador">{abierto ? '▼' : '▶'}</span>
       </div>
       {abierto && children}
@@ -161,6 +164,7 @@ export default function Bitacoras() {
   const [detalleCargando, setDetalleCargando] = useState(false);
   const [detalleError, setDetalleError] = useState(null);
   const [filtroSentimiento, setFiltroSentimiento] = useState({ valor: '', mod: '' });
+  const [panelesAbiertos, setPanelesAbiertos] = useState(new Set(['mensajes-limpios']));
 
   const cargarCambios = useCallback(async () => {
     setCargandoCambios(true);
@@ -365,13 +369,58 @@ export default function Bitacoras() {
     const filas = estado?.filas ?? [];
     const total = estado ? estado.total : 0;
     const pagina = estado ? estado.pagina : 1;
+    const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const p = Math.min(Math.max(1, pagina), totalPaginas);
     const cabeceras = cabecerasOutput(endpoint);
+    const clavePanel = `detalle-${endpoint}`;
+    const abierto = panelesAbiertos.has(clavePanel);
+    const alternarPanel = () => {
+      setPanelesAbiertos((prev) => {
+        const next = new Set(prev);
+        if (next.has(clavePanel)) next.delete(clavePanel);
+        else next.add(clavePanel);
+        return next;
+      });
+    };
+
+    const paginacionTitulo = (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: 'auto' }}>
+        <button
+          type="button"
+          className="btn-pag"
+          disabled={p === 1 || filas.length === 0}
+          onClick={() => irPaginaOutput(endpoint, p - 1)}
+          style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+        >
+          Anterior
+        </button>
+        <span style={{ fontSize: '0.75rem', color: '#5a7392', minWidth: '2.5rem', textAlign: 'center' }}>
+          {p}
+        </span>
+        <button
+          type="button"
+          className="btn-pag"
+          disabled={p === totalPaginas || filas.length === 0}
+          onClick={() => irPaginaOutput(endpoint, p + 1)}
+          style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+        >
+          Siguiente
+        </button>
+      </div>
+    );
 
     if (endpoint === 'resumen') {
       return (
         <>
           {detalleError && <div className="estado-error">{detalleError}</div>}
-          {renderResumen()}
+          <Panel
+            clave={clavePanel}
+            titulo={TITULO_OUTPUT[endpoint]}
+            abierto={abierto}
+            alternar={alternarPanel}
+          >
+            {renderResumen()}
+          </Panel>
         </>
       );
     }
@@ -379,49 +428,68 @@ export default function Bitacoras() {
     return (
       <>
         {estado?.error && <div className="estado-error">{estado.error}</div>}
-        {!estado?.error && filas.length === 0 && <p className="placeholder">Sin registros para mostrar.</p>}
+        {!estado?.error && filas.length === 0 && (
+          <Panel clave={clavePanel} titulo={TITULO_OUTPUT[endpoint]} abierto={abierto} alternar={alternarPanel}>
+            <p className="placeholder">Sin registros para mostrar.</p>
+          </Panel>
+        )}
         {!estado?.error && filas.length > 0 && (
           <>
             {endpoint === 'mensajes-limpios' ? (
-              <div className="tarjetas-mensajes">
-                {filas.map((f) => (
-                  <div key={f.id} className="tarjeta-mensaje">
-                    <div className="tarjeta-cabecera">
-                      <span className="tarjeta-id">{texto(f.id_mensaje)}</span>
-                      <span className="tarjeta-fecha">{texto(f.fecha)}</span>
-                    </div>
-                    <div className="tarjeta-cuerpo">
-                      {f.autor && <div className="tarjeta-dato"><strong>Autor:</strong> {texto(f.autor)}</div>}
-                      {f.tipo_contenido && <div className="tarjeta-dato"><strong>Tipo:</strong> {texto(f.tipo_contenido)}</div>}
-                      {f.polaridad_msg && <div className="tarjeta-dato"><strong>Polaridad:</strong> {texto(f.polaridad_msg)}</div>}
-                      {f.sentimiento_dominante && (
-                        <div className="tarjeta-dato"><strong>Sentimiento dominante:</strong> {texto(f.sentimiento_dominante)}</div>
-                      )}
-                      {f.texto_limpio && (
-                        <div className="tarjeta-texto">{texto(f.texto_limpio)}</div>
-                      )}
-                    </div>
-                    {f.datos && typeof f.datos === 'object' && !Array.isArray(f.datos) && (
-                      <div className="tarjeta-datos">
-                        {Object.entries(f.datos).map(([k, v]) => (
-                          <div key={k} className="tarjeta-dinamico"><strong>{k}:</strong> {texto(v)}</div>
-                        ))}
+              <Panel
+                clave={clavePanel}
+                titulo={TITULO_OUTPUT[endpoint]}
+                abierto={abierto}
+                alternar={alternarPanel}
+              >
+                <div className="tarjetas-mensajes">
+                  {filas.map((f) => (
+                    <div key={f.id} className="tarjeta-mensaje">
+                      <div className="tarjeta-cabecera">
+                        <span className="tarjeta-id">{texto(f.id_mensaje)}</span>
+                        <span className="tarjeta-fecha">{texto(f.fecha)}</span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      <div className="tarjeta-cuerpo">
+                        {f.autor && <div className="tarjeta-dato"><strong>Autor:</strong> {texto(f.autor)}</div>}
+                        {f.tipo_contenido && <div className="tarjeta-dato"><strong>Tipo:</strong> {texto(f.tipo_contenido)}</div>}
+                        {f.polaridad_msg && <div className="tarjeta-dato"><strong>Polaridad:</strong> {texto(f.polaridad_msg)}</div>}
+                        {f.sentimiento_dominante && (
+                          <div className="tarjeta-dato"><strong>Sentimiento dominante:</strong> {texto(f.sentimiento_dominante)}</div>
+                        )}
+                        {f.texto_limpio && (
+                          <div className="tarjeta-texto">{texto(f.texto_limpio)}</div>
+                        )}
+                      </div>
+                      {f.datos && typeof f.datos === 'object' && !Array.isArray(f.datos) && (
+                        <div className="tarjeta-datos">
+                          {Object.entries(f.datos).map(([k, v]) => (
+                            <div key={k} className="tarjeta-dinamico"><strong>{k}:</strong> {texto(v)}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Panel>
             ) : (
-              <TablaPaginada
-                filas={filas}
-                total={total}
-                cabeceras={cabeceras}
-                filasRenderer={filasRendererOutput(endpoint)}
-                clave={endpoint}
-                pagina={pagina}
-                setPagina={(p) => irPaginaOutput(endpoint, p)}
-                serverPaginada
-              />
+              <Panel
+                clave={clavePanel}
+                titulo={TITULO_OUTPUT[endpoint]}
+                abierto={abierto}
+                alternar={alternarPanel}
+                acciones={paginacionTitulo}
+              >
+                <TablaPaginada
+                  filas={filas}
+                  total={total}
+                  cabeceras={cabeceras}
+                  filasRenderer={filasRendererOutput(endpoint)}
+                  clave={endpoint}
+                  pagina={pagina}
+                  setPagina={(p) => irPaginaOutput(endpoint, p)}
+                  serverPaginada
+                />
+              </Panel>
             )}
           </>
         )}
@@ -507,6 +575,12 @@ export default function Bitacoras() {
             Limpiar filtros
           </button>
         </div>
+
+        {!errorEjecuciones && !cargandoEjecuciones && ejecuciones.length > 0 && (
+          <p className="clickable-hint">
+            Puede hacer clic en cualquier fila de la tabla para ver el detalle de la ejecución.
+          </p>
+        )}
 
         {errorEjecuciones && <div className="estado-error">{errorEjecuciones}</div>}
         {!errorEjecuciones && !cargandoEjecuciones && ejecuciones.length === 0 && (
