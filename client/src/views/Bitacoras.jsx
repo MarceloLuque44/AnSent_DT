@@ -140,7 +140,7 @@ const TITULO_OUTPUT = {
 const ENDPOINTS = ['mensajes-limpios', 'mensajes-excluidos', 'tokens', 'stopwords', 'emojis-uso', 'emojis-pendientes', 'resumen'];
 
 export default function Bitacoras() {
-  const [tab, setTab] = useState('cambios');
+  const [tab, setTab] = useState('bitacora');
 
   // --- Cambios de código/diccionarios ---
   const [cambios, setCambios] = useState([]);
@@ -156,6 +156,15 @@ export default function Bitacoras() {
   const [cargandoEjecuciones, setCargandoEjecuciones] = useState(true);
   const [errorEjecuciones, setErrorEjecuciones] = useState(null);
   const [actualizadoEjecuciones, setActualizadoEjecuciones] = useState(null);
+
+  // --- Bitacora limpia (hoja Bitacora de bitacora_limpia.xlsx) ---
+  const [bitacora, setBitacora] = useState([]);
+  const [totalBitacora, setTotalBitacora] = useState(0);
+  const [paginaBitacora, setPaginaBitacora] = useState(1);
+  const [filtrosBitacora, setFiltrosBitacora] = useState({ fechaDesde: '', fechaHasta: '', responsable: '', id_paso: '' });
+  const [cargandoBitacora, setCargandoBitacora] = useState(true);
+  const [errorBitacora, setErrorBitacora] = useState(null);
+  const [actualizadoBitacora, setActualizadoBitacora] = useState(null);
 
   // --- Detalle de ejecución ---
   const [detalleId, setDetalleId] = useState(null);
@@ -209,18 +218,51 @@ export default function Bitacoras() {
     }
   }, [qsEjecuciones]);
 
+  const qsBitacora = useMemo(() => {
+    const qs = new URLSearchParams();
+    qs.set('limit', PAGE_SIZE);
+    qs.set('offset', (paginaBitacora - 1) * PAGE_SIZE);
+    if (filtrosBitacora.fechaDesde) qs.set('fecha_desde', filtrosBitacora.fechaDesde);
+    if (filtrosBitacora.fechaHasta) qs.set('fecha_hasta', filtrosBitacora.fechaHasta);
+    if (filtrosBitacora.responsable) qs.set('responsable', filtrosBitacora.responsable);
+    if (filtrosBitacora.id_paso) qs.set('id_paso', filtrosBitacora.id_paso);
+    return qs.toString();
+  }, [paginaBitacora, filtrosBitacora]);
+
+  const cargarBitacora = useCallback(async () => {
+    setCargandoBitacora(true);
+    setErrorBitacora(null);
+    try {
+      const resp = await apiGet(`/api/bitacora/bitacora?${qsBitacora}`);
+      setBitacora(resp.data ?? []);
+      setTotalBitacora(resp.total ?? 0);
+      setActualizadoBitacora(new Date());
+    } catch (err) {
+      setErrorBitacora(err.message);
+      setBitacora([]);
+    } finally {
+      setCargandoBitacora(false);
+    }
+  }, [qsBitacora]);
+
   useEffect(() => {
     cargarCambios();
     cargarEjecuciones();
-  }, [cargarCambios, cargarEjecuciones]);
+    cargarBitacora();
+  }, [cargarCambios, cargarEjecuciones, cargarBitacora]);
 
   const cargarTodo = useCallback(async () => {
-    await Promise.all([cargarCambios(), cargarEjecuciones()]);
-  }, [cargarCambios, cargarEjecuciones]);
+    await Promise.all([cargarCambios(), cargarEjecuciones(), cargarBitacora()]);
+  }, [cargarCambios, cargarEjecuciones, cargarBitacora]);
 
   const limpiarFiltros = () => {
     setFiltros({ fechaDesde: '', fechaHasta: '', archivo: '', responsable: '', estado: '' });
     setPaginaEjecuciones(1);
+  };
+
+  const limpiarFiltrosBitacora = () => {
+    setFiltrosBitacora({ fechaDesde: '', fechaHasta: '', responsable: '', id_paso: '' });
+    setPaginaBitacora(1);
   };
 
   const seleccionarEjecucion = (id) => {
@@ -667,6 +709,130 @@ export default function Bitacoras() {
     );
   };
 
+  const renderBitacora = () => {
+    const cabeceras = [
+      'Fecha', 'Hora', 'Paso', 'Campo/columna', 'Atributo', 'Tipo problema', 'Metodologia',
+      'Filas afectadas', 'Antes', 'Despues', 'Responsable', 'Accion realizada', 'Justificacion',
+    ];
+
+    const filasFiltradas = filtrarPorFechas(bitacora, 'fecha', filtrosBitacora.fechaDesde, filtrosBitacora.fechaHasta);
+    const totalPaginas = Math.max(1, Math.ceil(totalBitacora / PAGE_SIZE));
+    const p = Math.min(Math.max(1, paginaBitacora), totalPaginas);
+    const inicio = (p - 1) * PAGE_SIZE;
+    const pageRows = filasFiltradas.slice(inicio, inicio + PAGE_SIZE);
+
+    const textoCorto = (v, n = 60) => {
+      const s = texto(v);
+      return s.length > n ? s.slice(0, n) + '…' : s;
+    };
+
+    return (
+      <>
+        {errorBitacora && <div className="estado-error">{errorBitacora}</div>}
+        {actualizadoBitacora && !errorBitacora && (
+          <p className="page-desc">
+            Última actualización: {actualizadoBitacora.toLocaleString()}
+          </p>
+        )}
+        {!errorBitacora && !cargandoBitacora && bitacora.length === 0 && (
+          <p className="placeholder">No hay pasos de bitacora registrados todavía.</p>
+        )}
+        {!errorBitacora && !cargandoBitacora && bitacora.length > 0 && (
+          <>
+            <div className="filtros-fechas">
+              <label>
+                Desde
+                <input
+                  type="date"
+                  value={filtrosBitacora.fechaDesde}
+                  onChange={(e) => { setFiltrosBitacora((prev) => ({ ...prev, fechaDesde: e.target.value })); setPaginaBitacora(1); }}
+                />
+              </label>
+              <label>
+                Hasta
+                <input
+                  type="date"
+                  value={filtrosBitacora.fechaHasta}
+                  onChange={(e) => { setFiltrosBitacora((prev) => ({ ...prev, fechaHasta: e.target.value })); setPaginaBitacora(1); }}
+                />
+              </label>
+              <label style={{ minWidth: '160px' }}>
+                Responsable
+                <input
+                  type="text"
+                  value={filtrosBitacora.responsable}
+                  onChange={(e) => { setFiltrosBitacora((prev) => ({ ...prev, responsable: e.target.value })); setPaginaBitacora(1); }}
+                  placeholder="filtrar por responsable"
+                />
+              </label>
+              <label style={{ minWidth: '120px' }}>
+                Paso
+                <input
+                  type="text"
+                  value={filtrosBitacora.id_paso}
+                  onChange={(e) => { setFiltrosBitacora((prev) => ({ ...prev, id_paso: e.target.value })); setPaginaBitacora(1); }}
+                  placeholder="filtrar por paso (P01...)"
+                />
+              </label>
+              <button type="button" className="btn" onClick={limpiarFiltrosBitacora}>
+                Limpiar filtros
+              </button>
+            </div>
+
+            <div className="tabla-scroll">
+              <table className="tabla">
+                <thead>
+                  <tr>{cabeceras.map((c) => <th key={c}>{c}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((f) => (
+                    <tr key={f.id}>
+                      <td>{texto(f.fecha)}</td>
+                      <td>{texto(f.hora)}</td>
+                      <td>{texto(f.id_paso)}</td>
+                      <td title={texto(f.campo_columna)}>{textoCorto(f.campo_columna)}</td>
+                      <td>{texto(f.atributo)}</td>
+                      <td>{texto(f.tipo_problema)}</td>
+                      <td title={texto(f.metodologia)}>{textoCorto(f.metodologia)}</td>
+                      <td>{texto(f.filas_afectadas)}</td>
+                      <td>{texto(f.filas_antes)}</td>
+                      <td>{texto(f.filas_despues)}</td>
+                      <td>{texto(f.responsable)}</td>
+                      <td title={texto(f.accion_realizada)}>{textoCorto(f.accion_realizada)}</td>
+                      <td title={texto(f.justificacion)}>{textoCorto(f.justificacion)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalBitacora > PAGE_SIZE && (
+              <div className="paginacion">
+                <button
+                  type="button"
+                  className="btn-pag"
+                  disabled={p === 1}
+                  onClick={() => setPaginaBitacora(p - 1)}
+                >
+                  Anterior
+                </button>
+                <span className="pagina-actual">Página {p} de {totalPaginas} · {totalBitacora} registros</span>
+                <button
+                  type="button"
+                  className="btn-pag"
+                  disabled={p === totalPaginas}
+                  onClick={() => setPaginaBitacora(p + 1)}
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </>
+    );
+  };
+
   const renderDetalle = () => {
     if (!detalleId) return null;
     return (
@@ -785,7 +951,7 @@ export default function Bitacoras() {
     );
   };
 
-  const estaCargando = cargandoCambios || cargandoEjecuciones;
+  const estaCargando = cargandoCambios || cargandoEjecuciones || cargandoBitacora;
 
   return (
     <div>
@@ -801,16 +967,17 @@ export default function Bitacoras() {
         </button>
       </header>
 
-      {(errorCambios || errorEjecuciones) && (
+      {(errorCambios || errorEjecuciones || errorBitacora) && (
         <div className="estado-error">
           {errorCambios && <div>Cambios: {errorCambios}</div>}
           {errorEjecuciones && <div>Ejecuciones: {errorEjecuciones}</div>}
+          {errorBitacora && <div>Bitacora: {errorBitacora}</div>}
         </div>
       )}
 
       {!detalleId && (
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          {['cambios', 'ejecuciones'].map((t) => (
+          {['bitacora', 'cambios', 'ejecuciones'].map((t) => (
             <button
               key={t}
               type="button"
@@ -827,13 +994,19 @@ export default function Bitacoras() {
                 borderBottom: tab === t ? '2px solid var(--azul)' : 'none',
               }}
             >
-              {t === 'cambios' ? 'Cambios de código/diccionarios' : 'Ejecuciones de preprocesar'}
+              {t === 'bitacora'
+                ? 'Bitacora de preprocesamiento'
+                : t === 'cambios'
+                  ? 'Cambios de código/diccionarios'
+                  : 'Ejecuciones de preprocesar'}
             </button>
           ))}
         </div>
       )}
 
       {detalleId && renderDetalle()}
+
+      {!detalleId && tab === 'bitacora' && renderBitacora()}
 
       {!detalleId && tab === 'cambios' && renderCambios()}
 

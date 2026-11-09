@@ -167,4 +167,105 @@ router.post('/experimentos', requireApiKey, async (req, res, next) => {
   }
 });
 
+/** GET /api/bitacora/bitacora — listado paginado de pasos de la bitacora limpia. */
+router.get('/bitacora', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const where = [];
+    const params = [];
+
+    const esFecha = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (esFecha(req.query.fecha_desde)) {
+      params.push(req.query.fecha_desde);
+      where.push(`fecha >= $${params.length}::date`);
+    }
+    if (esFecha(req.query.fecha_hasta)) {
+      params.push(req.query.fecha_hasta);
+      where.push(`fecha <= $${params.length}::date`);
+    }
+    if (req.query.responsable) {
+      params.push(`%${req.query.responsable}%`);
+      where.push(`responsable ILIKE $${params.length}`);
+    }
+    if (req.query.id_paso) {
+      params.push(`%${req.query.id_paso}%`);
+      where.push(`id_paso ILIKE $${params.length}`);
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const total = await query(
+      `SELECT count(*)::int AS total FROM public.bitacora ${whereSql}`,
+      params
+    );
+
+    const filas = await query(
+      `SELECT id,
+              to_char(fecha, 'YYYY-MM-DD') AS fecha,
+              to_char(hora, 'HH24:MI:SS') AS hora,
+              campo_columna, id_paso, atributo, tipo_problema, metodologia,
+              accion_realizada, justificacion, filas_afectadas, impacto_dataset,
+              script, filas_antes, filas_despues, ejemplo_antes, ejemplo_despues,
+              id_mensaje_ejemplo, responsable,
+              to_char(creado_en, 'YYYY-MM-DD"T"HH24:MI:SS') AS creado_en
+       FROM public.bitacora
+       ${whereSql}
+       ORDER BY fecha DESC NULLS LAST, id DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    );
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ok: true,
+      data: filas.rows,
+      total: total.rows[0].total,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    console.error('[bitacora/bitacora] ERROR:', err.message);
+    next(err);
+  }
+});
+
+/** POST /api/bitacora/bitacora — inserta masivamente filas de la bitacora limpia.
+ * Body: { filas: [{ campo_columna, id_paso, fecha, hora, ... }] } */
+router.post('/bitacora', requireApiKey, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const filas = Array.isArray(body.filas) ? body.filas : [];
+    if (filas.length === 0) {
+      return res.status(400).json({ error: 'filas debe ser un array no vacio' });
+    }
+
+    const columnas = [
+      'campo_columna', 'id_paso', 'fecha', 'hora', 'atributo', 'tipo_problema',
+      'metodologia', 'accion_realizada', 'justificacion', 'filas_afectadas',
+      'impacto_dataset', 'script', 'filas_antes', 'filas_despues',
+      'ejemplo_antes', 'ejemplo_despues', 'id_mensaje_ejemplo', 'responsable',
+    ];
+    const tipos = [
+      'text', 'text', 'date', 'time', 'text', 'text',
+      'text', 'text', 'text', 'int', 'text', 'text',
+      'int', 'int', 'text', 'text', 'text', 'text',
+    ];
+    const params = tipos.map((t, i) => `$${i + 1}::${t}[]`).join(', ');
+    const values = columnas.map((c) => filas.map((f) => f[c] ?? null));
+
+    await query(
+      `INSERT INTO public.bitacora (${columnas.join(', ')})
+       SELECT * FROM unnest(${params})`,
+      values
+    );
+
+    res.status(201).json({ ok: true, filas: filas.length });
+  } catch (err) {
+    console.error('[bitacora/bitacora POST] ERROR:', err.message);
+    next(err);
+  }
+});
+
 export default router;

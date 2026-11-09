@@ -514,6 +514,62 @@ probar_conexion_api <- function() {
 #probar_conexion_api()
 
 # Con un análisis ya calculado, sube los niveles al dashboard:
+# migrar_bitacora(): lee bitacoras/bitacora_limpia.xlsx (hoja "Bitacora") y la envia
+# al endpoint POST /api/bitacora/bitacora de la base de datos. Best-effort.
+migrar_bitacora <- function(dir_bitacoras = "bitacoras") {
+  if (!nzchar(Sys.getenv("ANSENT_API_URL", "")) || !nzchar(Sys.getenv("ANSENT_API_KEY", ""))) {
+    message("migrar_bitacora: ANSENT_API_URL o ANSENT_API_KEY no definidos; se omite el envio a la API/BD.")
+    return(invisible(0L))
+  }
+  f <- file.path(dir_bitacoras, "bitacora_limpia.xlsx")
+  if (!file.exists(f)) {
+    message(sprintf("migrar_bitacora: no se encontro %s; no se envia a la API/BD.", f))
+    return(invisible(0L))
+  }
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    install.packages('openxlsx')
+  }
+  b <- tryCatch(
+    openxlsx::read.xlsx(f, sheet = "Bitacora", colNames = TRUE),
+    error = function(e) {
+      message(sprintf("migrar_bitacora: no se pudo leer la hoja 'Bitacora' de %s: %s", f, conditionMessage(e)))
+      NULL
+    }
+  )
+  if (is.null(b) || !nrow(b)) {
+    message("migrar_bitacora: sin filas para enviar a la API/BD.")
+    return(invisible(0L))
+  }
+  b[] <- lapply(b, function(v) {
+    v <- as.character(v)
+    v[is.na(v) | v == "NA"] <- ""
+    v
+  })
+  filas <- lapply(seq_len(nrow(b)), function(i) as.list(b[i, , drop = FALSE]))
+  filas <- lapply(filas, function(fila) {
+    lapply(fila, function(v) {
+      if (length(v) == 0 || all(is.na(v))) return(NULL)
+      if (is.atomic(v) && length(v) == 1) v[[1]] else v
+    })
+  })
+  tryCatch(
+    {
+      req <- httr2::request(paste0(api_url(), "/api/bitacora/bitacora")) |>
+        httr2::req_headers(`x-api-key` = api_key()) |>
+        httr2::req_body_json(list(filas = filas), auto_unbox = TRUE) |>
+        httr2::req_method("POST") |>
+        httr2::req_timeout(60)
+      resp <- api_perform(req)
+      message(sprintf("migrar_bitacora: %d fila(s) enviada(s) a la API/BD.", nrow(b)))
+      invisible(nrow(b))
+    },
+    error = function(e) {
+      message(sprintf("migrar_bitacora: no se pudieron enviar los datos a la API/BD: %s", conditionMessage(e)))
+      invisible(0L)
+    }
+  )
+}
+
 if (exists("a") && inherits(a, "analisis_periodo")) {
   guardado <- enviar_niveles_api(a)
   print(guardado)
