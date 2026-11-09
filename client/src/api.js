@@ -6,11 +6,18 @@
  * del frontend en Render.
  */
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 export const urlApi = (path) => {
   if (!API_BASE) return path;
   return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 };
+
+const headersConClave = (extra = {}) => ({
+  'Content-Type': 'application/json',
+  ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
+  ...extra,
+});
 
 export async function apiGet(path) {
   const res = await fetch(urlApi(path));
@@ -24,7 +31,7 @@ export async function apiGet(path) {
 export async function apiPost(path, body) {
   const res = await fetch(urlApi(path), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headersConClave(),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -37,7 +44,7 @@ export async function apiPost(path, body) {
 export async function apiPut(path, body) {
   const res = await fetch(urlApi(path), {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headersConClave(),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -48,7 +55,10 @@ export async function apiPut(path, body) {
 }
 
 export async function apiDelete(path) {
-  const res = await fetch(urlApi(path), { method: 'DELETE' });
+  const res = await fetch(urlApi(path), {
+    method: 'DELETE',
+    headers: headersConClave(),
+  });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Error ${res.status}`);

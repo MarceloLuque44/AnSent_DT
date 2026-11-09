@@ -1,16 +1,3 @@
-# source("cargar_proyecto.R")              # carga todas las herramientas (una vez)
-# res   <- preprocesar("data/result.json") # UNA vez, con todo el dataset
-# datos <- cargar_datos_analisis("salida") # carga mensajes_limpios.csv y tokens.csv
-# 
-# a <- analizar_periodo(datos, c("2023-01-01", "2023-03-31"))   # un periodo
-#a$nivel; a$tfidf; a$topicos$terminos; a$shallow$upos; a$libreria
-# p <- graficos_periodo(a);  p$barras;  p$tiempo;  p$polar
-#
-# cmp <- comparar_periodos(datos, "todo_2023", "todo_2024")      # A contra B
-# cmp$interpretacion;  graficos_comparacion(cmp)$arana
-#
-#guardar_analisis(a)   # deja CSV/PNG en salida/analisis/<periodo>/ (para el dashboard)
-#
 
 # ==============================================================================
 # Fase 1: conexión con la API en Render

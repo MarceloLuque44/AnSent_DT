@@ -745,6 +745,17 @@ registrar_ejecucion <- function(dir_bitacoras, fila, ctx, estado = "ok", mensaje
   hojas$Ejecuciones <- .unir(ej, df)
   hojas$Cambios <- .estado_cambios(cam)
   .guardar_completa(dir_bitacoras, hojas)
+
+  # Envio a la API de bitacora (best-effort, nunca bloquea el pipeline ni el XLSX)
+  tryCatch({
+    id_remoto <- enviar_ejecucion_bitacora_api(fila)
+    if (!is.null(id_remoto) && !is.null(nuevas) && nrow(nuevas) > 0) {
+      enviar_pasos_bitacora_api(id_remoto, nuevas)
+    }
+  }, error = function(e) {
+    message("Bitacora: no se pudieron enviar los datos a la API/BD: ", conditionMessage(e))
+  })
+
   invisible(id_e)
 }
 
@@ -777,5 +788,159 @@ registrar_experimento <- function(metodo, parametros = "", n_documentos = "", ta
     archivo_resultado = archivo_resultado, notas = notas, responsable = responsable, stringsAsFactors = FALSE)
   hojas$Experimentos <- .unir(ex, fila)
   .guardar_completa(dir_bitacoras, hojas)
+
+  # Envio a la API de bitacora (best-effort, nunca bloquea el pipeline ni el XLSX)
+  tryCatch({
+    enviar_experimento_bitacora_api(fila)
+  }, error = function(e) {
+    message("Bitacora: no se pudo enviar el experimento a la API/BD: ", conditionMessage(e))
+  })
+
   invisible(fila)
+}
+
+# ==============================================================================
+# Helpers de envío de bitácora a la API/BD (Postgres vía Node/Express).
+# Best-effort: nunca bloquean el pipeline ni el guardado de los XLSX locales.
+# ==============================================================================
+
+# URL base de la API (env var ANSENT_API_URL).
+.api_bitacora_url <- function() {
+  u <- Sys.getenv("ANSENT_API_URL", "")
+  if (!nzchar(u)) {
+    stop("Define ANSENT_API_URL, por ejemplo http://localhost:3000", call. = FALSE)
+  }
+  sub("/+$", "", u)
+}
+
+# Clave de API (env var ANSENT_API_KEY, debe coincidir con R_API_KEY del servidor).
+.api_bitacora_key <- function() {
+  k <- Sys.getenv("ANSENT_API_KEY", "")
+  if (!nzchar(k)) {
+    stop("Define ANSENT_API_KEY con la clave del servidor (R_API_KEY).", call. = FALSE)
+  }
+  k
+}
+
+# POST JSON con header x-api-key. Requiere httr2 (se instala bajo demanda si falta).
+.api_bitacora_post <- function(path, body, timeout = 60) {
+  if (!requireNamespace("httr2", quietly = TRUE)) {
+    install.packages('httr2')
+  }
+  req <- httr2::request(paste0(.api_bitacora_url(), path)) |>
+    httr2::req_headers(`x-api-key` = .api_bitacora_key()) |>
+    httr2::req_body_json(body, auto_unbox = TRUE) |>
+    httr2::req_method("POST") |>
+    httr2::req_timeout(timeout)
+  resp <- httr2::req_perform(req)
+  if (httr2::resp_status(resp) >= 400) {
+    stop(
+      "API ", httr2::resp_status(resp), ": ",
+      httr2::resp_body_string(resp),
+      call. = FALSE
+    )
+  }
+  httr2::resp_body_json(resp, simplifyVector = TRUE)
+}
+
+# Envia la cabecera de ejecucion de bitacora. Devuelve id_ejecucion remoto o NULL.
+enviar_ejecucion_bitacora_api <- function(fila) {
+  if (is.null(fila) || !is.list(fila)) {
+    message("Ejecucion bitacora: sin metadatos para enviar a la API.")
+    return(invisible(NULL))
+  }
+  body <- list(
+    fecha = fila$fecha %||% format(Sys.time(), "%Y-%m-%d"),
+    hora_inicio = fila$hora_inicio %||% format(Sys.time(), "%H:%M:%S"),
+    hora_fin = fila$hora_fin %||% format(Sys.time(), "%H:%M:%S"),
+    duracion_seg = fila$duracion_seg,
+    responsable = fila$responsable %||% Sys.getenv("RESPONSABLE", ""),
+    archivo = fila$archivo %||% "",
+    archivo_md5 = fila$archivo_md5 %||% "",
+    evento = fila$evento %||% "",
+    parametros = fila$parametros %||% "",
+    estado = fila$estado %||% "ok",
+    paso_donde_paro = fila$paso_donde_paro %||% "",
+    mensaje_error = fila$mensaje_error %||% "",
+    pasos_registrados = fila$pasos_registrados,
+    registros_leidos = fila$registros_leidos,
+    mensajes_limpios = fila$mensajes_limpios,
+    mensajes_excluidos = fila$mensajes_excluidos,
+    emojis_pendientes = fila$emojis_pendientes %||% 0,
+    cambios_detectados = fila$cambios_detectados %||% "",
+  )
+  resp <- tryCatch(.api_bitacora_post("/api/bitacora/ejecuciones", body), error = function(e) NULL)
+  if (is.null(resp)) return(invisible(NULL))
+  invisible(resp$id_ejecucion %||% NULL)
+}
+
+# Envia los pasos de una ejecucion (DELETE WHERE id_ejecucion + INSERT masivo).
+enviar_pasos_bitacora_api <- function(id_ejecucion, pasos_df) {
+  if (is.null(id_ejecucion) || is.na(id_ejecucion)) {
+    message("Pasos bitacora: sin id_ejecucion; no se envian a la API.")
+    return(invisible(NULL))
+  }
+  if (is.null(pasos_df) || !nrow(pasos_df)) {
+    message("Pasos bitacora: sin filas para enviar a la API.")
+    return(invisible(NULL))
+  }
+  # Campos numericos vacíos ("") -> NA para que se envíen como null y no rompan el cast a int en PG
+  cols_num <- c("filas_antes", "filas_despues", "filas_afectadas")
+  for (cn in cols_num) {
+    if (cn %in% names(pasos_df)) {
+      pasos_df[[cn]] <- suppressWarnings(as.numeric(pasos_df[[cn]]))
+    }
+  }
+  filas <- lapply(seq_len(nrow(pasos_df)), function(i) as.list(pasos_df[i, , drop = FALSE]))
+  filas <- lapply(filas, function(f) {
+    lapply(f, function(v) {
+      if (length(v) == 0 || all(is.na(v))) return(NULL)
+      v <- if (is.atomic(v) && length(v) == 1) v[[1]] else v
+      if (inherits(v, c("Date", "POSIXct", "POSIXlt", "POSIXt"))) return(format(v))
+      if (is.factor(v)) return(as.character(v))
+      if (is.list(v) && !is.data.frame(v)) return(jsonlite::toJSON(v, auto_unbox = TRUE))
+      if (is.data.frame(v)) return(jsonlite::toJSON(v, auto_unbox = TRUE))
+      v
+    })
+  })
+  body <- list(pasos = filas)
+  tryCatch(
+    .api_bitacora_post(sprintf("/api/bitacora/ejecuciones/%s/pasos", id_ejecucion), body),
+    error = function(e) {
+      message(sprintf("Pasos bitacora: no se pudieron enviar los datos a la API: %s", conditionMessage(e)))
+      invisible(NULL)
+    }
+  )
+  invisible(NULL)
+}
+
+# Envia un experimento de bitacora.
+enviar_experimento_bitacora_api <- function(fila) {
+  if (is.null(fila) || !is.list(fila)) {
+    message("Experimento bitacora: sin datos para enviar a la API.")
+    return(invisible(NULL))
+  }
+  body <- list(
+    fecha = fila$fecha %||% format(Sys.Date(), "%Y-%m-%d"),
+    hora = fila$hora %||% format(Sys.time(), "%H:%M:%S"),
+    id_ejecucion_preprocesamiento = fila$id_ejecucion_preprocesamiento %||% NA,
+    dataset = fila$dataset %||% "",
+    dataset_md5 = fila$dataset_md5 %||% "",
+    metodo = fila$metodo %||% "",
+    parametros = fila$parametros %||% "",
+    n_documentos = fila$n_documentos %||% NA,
+    tamano_vocabulario = fila$tamano_vocabulario %||% NA,
+    resultado_principal = fila$resultado_principal %||% "",
+    archivo_resultado = fila$archivo_resultado %||% "",
+    notas = fila$notas %||% "",
+    responsable = fila$responsable %||% Sys.getenv("RESPONSABLE", ""),
+  )
+  tryCatch(
+    .api_bitacora_post("/api/bitacora/experimentos", body),
+    error = function(e) {
+      message(sprintf("Experimento bitacora: no se pudo enviar a la API: %s", conditionMessage(e)))
+      invisible(NULL)
+    }
+  )
+  invisible(NULL)
 }

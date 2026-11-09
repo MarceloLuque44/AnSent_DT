@@ -8,6 +8,7 @@ import cambiosRoutes from './routes/cambios.js';
 import diccionariosRoutes from './routes/diccionarios.js';
 import analisisRoutes from './routes/analisis.js';
 import preprocesarRoutes from './routes/preprocesar.js';
+import bitacoraRoutes from './routes/bitacora.js';
 import { query } from './db/pg.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,7 @@ app.use('/api/cambios', cambiosRoutes);
 app.use('/api/diccionarios', diccionariosRoutes);
 app.use('/api/dashboard', analisisRoutes);
 app.use('/api/preprocesar', preprocesarRoutes);
+app.use('/api/bitacora', bitacoraRoutes);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Endpoint no encontrado' });

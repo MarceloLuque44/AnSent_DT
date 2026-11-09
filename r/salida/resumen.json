@@ -1,24 +1,25 @@
 {
   "estado": "ok",
   "archivo": "result.json",
-  "responsable": "Patricia",
-  "registros_leidos": 26030,
-  "mensajes_limpios": 19496,
-  "mensajes_excluidos": 6534,
+  "responsable": "GRUPO13",
+  "registros_leidos": 17048,
+  "mensajes_limpios": 47,
+  "mensajes_excluidos": 17001,
   "excluidos_por_motivo": {
-    "Duplicado exacto (mismo autor y texto, >= 25 caracteres)": 463,
-    "Mensaje de servicio de Telegram (altas, invitaciones, fijados, cambios del grupo)": 3466,
-    "Publicidad / anuncio (puntaje >= 4)": 615,
-    "Sin contenido textual tras la limpieza (solo enlaces, símbolos o menciones)": 634,
-    "Sin texto (solo foto, video, archivo, audio u otro contenido multimedia)": 1356
+    "Duplicado exacto (mismo autor y texto, >= 25 caracteres)": 2,
+    "Fuera del periodo seleccionado": 14357,
+    "Mensaje de servicio de Telegram (altas, invitaciones, fijados, cambios del grupo)": 2592,
+    "Publicidad / anuncio (puntaje >= 4)": 24,
+    "Sin contenido textual tras la limpieza (solo enlaces, símbolos o menciones)": 5,
+    "Sin texto (solo foto, video, archivo, audio u otro contenido multimedia)": 21
   },
-  "rango_fechas": ["2022-12-26", "2026-10-17"],
+  "rango_fechas": ["2026-05-05", "2026-08-31"],
   "sentimientos_activos": ["alegria", "gratitud", "esperanza", "seguridad", "admiracion", "satisfaccion_tranquilidad", "sorpresa", "confusion", "preocupacion", "tristeza", "enojo", "decepcion", "frustracion_cansancio", "ironia", "curiosidad"],
   "polaridad": {
-    "negativo": 1181,
-    "neutral": 16137,
-    "positivo": 2178
+    "negativo": 1,
+    "neutral": 35,
+    "positivo": 11
   },
-  "emojis_pendientes": 0,
-  "pasos_bitacora": 52
+  "emojis_pendientes": 5,
+  "pasos_bitacora": 53
 }
