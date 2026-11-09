@@ -241,6 +241,8 @@ router.post('/bitacora', requireApiKey, async (req, res, next) => {
       return res.status(400).json({ error: 'filas debe ser un array no vacio' });
     }
 
+    await query(`TRUNCATE TABLE public.bitacora RESTART IDENTITY`);
+
     const columnas = [
       'campo_columna', 'id_paso', 'fecha', 'hora', 'atributo', 'tipo_problema',
       'metodologia', 'accion_realizada', 'justificacion', 'filas_afectadas',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api.js';
 import TablaCambios from '../components/TablaCambios.jsx';
+import EChart from '../components/EChart.jsx';
 
 const PAGE_SIZE = 10;
 
@@ -229,6 +230,17 @@ export default function Bitacoras() {
     return qs.toString();
   }, [paginaBitacora, filtrosBitacora]);
 
+  const qsGrafico = useMemo(() => {
+    const qs = new URLSearchParams();
+    qs.set('limit', '10000');
+    qs.set('offset', '0');
+    if (filtrosBitacora.fechaDesde) qs.set('fecha_desde', filtrosBitacora.fechaDesde);
+    if (filtrosBitacora.fechaHasta) qs.set('fecha_hasta', filtrosBitacora.fechaHasta);
+    if (filtrosBitacora.responsable) qs.set('responsable', filtrosBitacora.responsable);
+    if (filtrosBitacora.id_paso) qs.set('id_paso', filtrosBitacora.id_paso);
+    return qs.toString();
+  }, [filtrosBitacora]);
+
   const cargarBitacora = useCallback(async () => {
     setCargandoBitacora(true);
     setErrorBitacora(null);
@@ -245,15 +257,31 @@ export default function Bitacoras() {
     }
   }, [qsBitacora]);
 
+  const [bitacoraGrafico, setBitacoraGrafico] = useState([]);
+  const [cargandoGrafico, setCargandoGrafico] = useState(true);
+
+  const cargarGraficoBitacora = useCallback(async () => {
+    setCargandoGrafico(true);
+    try {
+      const resp = await apiGet(`/api/bitacora/bitacora?${qsGrafico}`);
+      setBitacoraGrafico(resp.data ?? []);
+    } catch (err) {
+      setBitacoraGrafico([]);
+    } finally {
+      setCargandoGrafico(false);
+    }
+  }, [qsGrafico]);
+
   useEffect(() => {
     cargarCambios();
     cargarEjecuciones();
     cargarBitacora();
-  }, [cargarCambios, cargarEjecuciones, cargarBitacora]);
+    cargarGraficoBitacora();
+  }, [cargarCambios, cargarEjecuciones, cargarBitacora, cargarGraficoBitacora]);
 
   const cargarTodo = useCallback(async () => {
-    await Promise.all([cargarCambios(), cargarEjecuciones(), cargarBitacora()]);
-  }, [cargarCambios, cargarEjecuciones, cargarBitacora]);
+    await Promise.all([cargarCambios(), cargarEjecuciones(), cargarBitacora(), cargarGraficoBitacora()]);
+  }, [cargarCambios, cargarEjecuciones, cargarBitacora, cargarGraficoBitacora]);
 
   const limpiarFiltros = () => {
     setFiltros({ fechaDesde: '', fechaHasta: '', archivo: '', responsable: '', estado: '' });
@@ -718,12 +746,50 @@ export default function Bitacoras() {
     const filasFiltradas = filtrarPorFechas(bitacora, 'fecha', filtrosBitacora.fechaDesde, filtrosBitacora.fechaHasta);
     const totalPaginas = Math.max(1, Math.ceil(totalBitacora / PAGE_SIZE));
     const p = Math.min(Math.max(1, paginaBitacora), totalPaginas);
-    const inicio = (p - 1) * PAGE_SIZE;
-    const pageRows = filasFiltradas.slice(inicio, inicio + PAGE_SIZE);
+    const pageRows = filasFiltradas;
 
     const textoCorto = (v, n = 60) => {
       const s = texto(v);
       return s.length > n ? s.slice(0, n) + '…' : s;
+    };
+
+    // Grafico: filas_despues por fecha-paso usando TODOS los datos filtrados (no solo la pagina actual).
+    const porPaso = {};
+    const ordenPasos = [];
+    for (const f of bitacoraGrafico) {
+      const clave = `${f.fecha || '—'} — ${f.id_paso || '—'}`;
+      if (!(clave in porPaso)) ordenPasos.push(clave);
+      porPaso[clave] = (porPaso[clave] || 0) + Number(f.filas_despues || 0);
+    }
+    const valoresGrafico = ordenPasos.map((c) => porPaso[c]);
+
+    const opcionGraficoBitacora = {
+      title: { text: 'Filas despues por fecha y paso', left: 'center', textStyle: { fontSize: 14 } },
+      tooltip: { trigger: 'axis' },
+      grid: { left: '6%', right: '6%', bottom: '16%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: ordenPasos,
+        axisLabel: { rotate: 45, fontSize: 10 },
+        name: 'Fecha — Paso',
+        nameLocation: 'center',
+        nameGap: 30,
+      },
+      yAxis: {
+        type: 'value',
+        name: 'filas_despues',
+        nameLocation: 'center',
+        nameGap: 40,
+      },
+      series: [
+        {
+          name: 'filas_despues',
+          type: 'bar',
+          showSymbol: false,
+          data: valoresGrafico,
+          itemStyle: { color: '#1746b0' },
+        },
+      ],
     };
 
     return (
@@ -778,6 +844,13 @@ export default function Bitacoras() {
                 Limpiar filtros
               </button>
             </div>
+
+            {/* Grafico: filas_despues por fecha-paso (responde a filtros activos) */}
+            {!cargandoGrafico && bitacoraGrafico.length > 0 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <EChart option={opcionGraficoBitacora} height={300} />
+              </div>
+            )}
 
             <div className="tabla-scroll">
               <table className="tabla">
@@ -951,7 +1024,7 @@ export default function Bitacoras() {
     );
   };
 
-  const estaCargando = cargandoCambios || cargandoEjecuciones || cargandoBitacora;
+  const estaCargando = cargandoCambios || cargandoEjecuciones || cargandoBitacora || cargandoGrafico;
 
   return (
     <div>
