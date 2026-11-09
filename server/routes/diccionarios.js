@@ -12,6 +12,7 @@ const SCHEMAS = {
     columnas: ['orden', 'nombre', 'polaridad', 'activo', 'definicion', 'palabras', 'raices'],
     requeridas: ['nombre', 'polaridad'],
     unicos: ['nombre'],
+    jsonb: ['palabras', 'raices'],
   },
   emojis: {
     tabla: 'public.config_diccionario_emojis',
@@ -160,14 +161,24 @@ router.get('/:tipo/:id', async (req, res, next) => {
  *  httr2 desde R ya envía JSON serializado, pero por seguridad garantizamos
  *  que palabras/raices lleguen como texto con corchetes [] y no como objetos {}. */
 const normalizarParametros = (s, b) => {
-  return s.columnas.map((c) => normalizarUno(b[c]));
+  return s.columnas.map((c) => normalizarUno(b[c], s.jsonb?.includes(c)));
 };
 
 /** Convierte un valor individual a texto JSON valido si es array u objeto.
- *  Evita que Postgres reciba {"a","b"} en lugar de ["a","b"] en columnas jsonb. */
-const normalizarUno = (v) => {
+ *  Evita que Postgres reciba {"a","b"} en lugar de ["a","b"] en columnas jsonb.
+ *  Para columnas jsonb, un escalar (p. ej. un unico string) se envia como
+ *  array ["x"]: es lo que ocurre cuando R/jsonlite aplica auto_unbox a un
+ *  vector de longitud 1. */
+const normalizarUno = (v, esJsonb = false) => {
+  if (v === null || v === undefined) return v;
   if (Array.isArray(v)) return JSON.stringify(v);
-  if (v !== null && v !== undefined && typeof v === 'object') return JSON.stringify(v);
+  if (typeof v === 'object') return JSON.stringify(v);
+  if (esJsonb) {
+    const txt = String(v).trim();
+    if (!txt) return null;
+    if (txt.startsWith('[') || txt.startsWith('{')) return txt;
+    return JSON.stringify([v]);
+  }
   return v;
 };
 
@@ -223,7 +234,7 @@ router.put('/:tipo/:id', requireApiKey, async (req, res, next) => {
     for (const c of s.columnas) {
       if (c in b) {
         sets.push(`${c} = $${i}`);
-        params.push(normalizarUno(b[c]));
+        params.push(normalizarUno(b[c], s.jsonb?.includes(c)));
         i++;
       }
     }

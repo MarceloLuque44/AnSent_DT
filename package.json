@@ -11,7 +11,8 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "client": "npm run dev --prefix client",
-    "build": "npm run build --prefix client"
+    "build": "npm run build --prefix client",
+    "check:r": "Rscript r/verificar_sintaxis.R"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -657,6 +657,12 @@ vigilar_cambios <- function(dir_bitacoras, dir_config = "config", responsable = 
     .guardar_control(dir_bitacoras, actual)      # la foto solo se actualiza si el registro se guardó
     message("Bitácora: se registraron ", length(ids), " cambio(s): ", paste(ids, collapse = ", "), ".")
     .avisar_pendientes(dir_bitacoras)
+    # Best-effort: el XLSX ya quedo guardado; si la API falla se puede reintentar
+    # con sincronizar_cambios_api().
+    try(
+      enviar_cambios_api(hojas$Cambios[hojas$Cambios$id_cambio %in% ids, , drop = FALSE]),
+      silent = TRUE
+    )
   }
   invisible(ids)
 }
@@ -678,6 +684,9 @@ anotar_cambio <- function(archivo, seccion = "", problema, como_se_detecto = "",
     responsable = responsable, estado_registro = "", stringsAsFactors = FALSE)
   hojas$Cambios <- .estado_cambios(.unir(cam, fila))
   .guardar_completa(dir_bitacoras, hojas)
+  # Best-effort: el XLSX ya quedo guardado; si la API falla no se pierde el cambio local.
+  try(enviar_cambios_api(hojas$Cambios[hojas$Cambios$id_cambio == fila$id_cambio, , drop = FALSE]),
+      silent = TRUE)
   invisible(fila)
 }
 
@@ -746,15 +755,20 @@ registrar_ejecucion <- function(dir_bitacoras, fila, ctx, estado = "ok", mensaje
   hojas$Cambios <- .estado_cambios(cam)
   .guardar_completa(dir_bitacoras, hojas)
 
-  # Envio a la API de bitacora (best-effort, nunca bloquea el pipeline ni el XLSX)
-  tryCatch({
-    id_remoto <- enviar_ejecucion_bitacora_api(fila)
-    if (!is.null(id_remoto) && !is.null(nuevas) && nrow(nuevas) > 0) {
-      enviar_pasos_bitacora_api(id_remoto, nuevas)
-    }
-  }, error = function(e) {
-    message("Bitacora: no se pudieron enviar los datos a la API/BD: ", conditionMessage(e))
-  })
+  # Envio a la API de bitacora (opt-in). El modelo nuevo persiste la cabecera y los
+  # outputs de preprocesar() via /api/preprocesar/*; la bitacora remota usa tablas
+  # propias (ejecuciones, ejecucion_pasos) que no forman parte de Esquema9.
+  # Se activa con ANSENT_BITACORA_API=1 y requiere las tablas de docs/Esquemas/Esquema8.sql.
+  if (.bitacora_api_habilitada()) {
+    tryCatch({
+      id_remoto <- enviar_ejecucion_bitacora_api(fila)
+      if (!is.null(id_remoto) && !is.null(nuevas) && nrow(nuevas) > 0) {
+        enviar_pasos_bitacora_api(id_remoto, nuevas)
+      }
+    }, error = function(e) {
+      message("Bitacora: no se pudieron enviar los datos a la API/BD: ", conditionMessage(e))
+    })
+  }
 
   invisible(id_e)
 }
@@ -789,12 +803,14 @@ registrar_experimento <- function(metodo, parametros = "", n_documentos = "", ta
   hojas$Experimentos <- .unir(ex, fila)
   .guardar_completa(dir_bitacoras, hojas)
 
-  # Envio a la API de bitacora (best-effort, nunca bloquea el pipeline ni el XLSX)
-  tryCatch({
-    enviar_experimento_bitacora_api(fila)
-  }, error = function(e) {
-    message("Bitacora: no se pudo enviar el experimento a la API/BD: ", conditionMessage(e))
-  })
+  # Envio a la API de bitacora (opt-in; ver .bitacora_api_habilitada()).
+  if (.bitacora_api_habilitada()) {
+    tryCatch({
+      enviar_experimento_bitacora_api(fila)
+    }, error = function(e) {
+      message("Bitacora: no se pudo enviar el experimento a la API/BD: ", conditionMessage(e))
+    })
+  }
 
   invisible(fila)
 }
@@ -822,6 +838,14 @@ registrar_experimento <- function(metodo, parametros = "", n_documentos = "", ta
   k
 }
 
+# Interruptor de la bitacora remota. Por defecto desactivada: el dashboard usa
+# /api/preprocesar/* y las tablas ejecuciones/ejecucion_pasos/experimentos no
+# existen en el esquema actual (ver docs/Esquemas/Esquema9.sql).
+.bitacora_api_habilitada <- function() {
+  v <- tolower(trimws(Sys.getenv("ANSENT_BITACORA_API", "")))
+  v %in% c("1", "true", "si", "sí", "yes", "on")
+}
+
 # POST JSON con header x-api-key. Requiere httr2 (se instala bajo demanda si falta).
 .api_bitacora_post <- function(path, body, timeout = 60) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
@@ -841,6 +865,134 @@ registrar_experimento <- function(metodo, parametros = "", n_documentos = "", ta
     )
   }
   httr2::resp_body_json(resp, simplifyVector = TRUE)
+}
+
+# ------------------------------------------------------------------------------
+# Envio de la hoja "Cambios" a public.cambios (POST /api/cambios).
+# A diferencia de la bitacora de ejecuciones, esta tabla SI existe en el
+# esquema actual, asi que se envia siempre que haya URL y clave configuradas.
+# ------------------------------------------------------------------------------
+
+.api_bitacora_configurada <- function() {
+  nzchar(Sys.getenv("ANSENT_API_URL", "")) && nzchar(Sys.getenv("ANSENT_API_KEY", ""))
+}
+
+.campo_texto <- function(v) {
+  if (is.null(v) || length(v) == 0) return("")
+  v <- as.character(v[1])
+  if (is.na(v)) "" else v
+}
+
+# Firma para no reinsertar en la BD un cambio que ya esta en el Excel y en la API.
+.firma_cambio <- function(x) {
+  f <- function(k) trimws(.campo_texto(x[[k]]))
+  paste(f("fecha"), f("hora"), f("archivo"), f("problema_detectado"), f("cambio_realizado"), sep = "|")
+}
+
+# Envia un data.frame de cambios (una fila = un POST). Best-effort: no lanza.
+enviar_cambios_api <- function(cambios, verbose = TRUE) {
+  if (is.null(cambios) || !is.data.frame(cambios) || !nrow(cambios)) {
+    return(invisible(0L))
+  }
+  if (!.api_bitacora_configurada()) {
+    if (verbose) message("Cambios: ANSENT_API_URL o ANSENT_API_KEY no definidos; no se envian a la API/BD.")
+    return(invisible(0L))
+  }
+  enviados <- 0L
+  fallos <- character(0)
+  for (i in seq_len(nrow(cambios))) {
+    fila <- cambios[i, , drop = FALSE]
+    body <- list(
+      fecha = .campo_texto(fila$fecha),
+      hora = .campo_texto(fila$hora),
+      tipo = .campo_texto(fila$tipo),
+      archivo = .campo_texto(fila$archivo),
+      seccion = .campo_texto(fila$seccion),
+      problema_detectado = .campo_texto(fila$problema_detectado),
+      como_se_detecto = .campo_texto(fila$como_se_detecto),
+      cambio_realizado = .campo_texto(fila$cambio_realizado),
+      justificacion = .campo_texto(fila$justificacion),
+      resultado = .campo_texto(fila$resultado),
+      ejecucion_prueba = .campo_texto(fila$ejecucion_prueba),
+      responsable = .campo_texto(fila$responsable)
+    )
+    ok <- tryCatch(
+      {
+        .api_bitacora_post("/api/cambios", body)
+        TRUE
+      },
+      error = function(e) {
+        fallos <<- c(fallos, sprintf("%s: %s", body$archivo, conditionMessage(e)))
+        FALSE
+      }
+    )
+    if (ok) enviados <- enviados + 1L
+  }
+  if (verbose) {
+    if (enviados > 0) message(sprintf("Cambios: %d registro(s) enviados a la API/BD.", enviados))
+    if (length(fallos) > 0) {
+      message("Cambios: fallaron ", length(fallos), " registro(s). Primero: ",
+              utils::head(fallos, 1))
+    }
+  }
+  invisible(enviados)
+}
+
+.api_bitacora_get <- function(path, query = "", timeout = 60) {
+  if (!requireNamespace("httr2", quietly = TRUE)) {
+    install.packages("httr2")
+  }
+  url <- paste0(.api_bitacora_url(), path)
+  if (nzchar(query)) url <- paste0(url, "?", query)
+  req <- httr2::request(url) |>
+    httr2::req_headers(`x-api-key` = .api_bitacora_key()) |>
+    httr2::req_timeout(timeout)
+  resp <- httr2::req_perform(req)
+  if (httr2::resp_status(resp) >= 400) {
+    stop("API ", httr2::resp_status(resp), ": ", httr2::resp_body_string(resp), call. = FALSE)
+  }
+  httr2::resp_body_json(resp, simplifyVector = FALSE)
+}
+
+.api_bitacora_listar_cambios <- function(limit = 200) {
+  out <- list()
+  offset <- 0L
+  repeat {
+    js <- .api_bitacora_get("/api/cambios", sprintf("limit=%d&offset=%d", limit, offset))
+    data <- js$data %||% list()
+    out <- c(out, data)
+    total <- as.integer(js$total %||% 0L)
+    offset <- offset + limit
+    if (length(data) == 0 || offset >= total) break
+  }
+  out
+}
+
+# Sincroniza la hoja "Cambios" con la BD: envia solo las filas que aun no
+# existen en la API (comparando fecha/hora/archivo/problema/cambio).
+sincronizar_cambios_api <- function(dir_bitacoras = "bitacoras", verbose = TRUE) {
+  if (!.api_bitacora_configurada()) {
+    stop("Define ANSENT_API_URL y ANSENT_API_KEY (ver r/Peticiones.R).", call. = FALSE)
+  }
+  cam <- .leer_completa(dir_bitacoras)$Cambios
+  if (is.null(cam) || !nrow(cam)) {
+    if (verbose) message("Cambios: no hay filas locales para sincronizar.")
+    return(invisible(0L))
+  }
+  remotos <- .api_bitacora_listar_cambios()
+  firma_remota <- vapply(remotos, .firma_cambio, character(1))
+  firma_local <- vapply(
+    seq_len(nrow(cam)),
+    function(i) .firma_cambio(as.list(cam[i, , drop = FALSE])),
+    character(1)
+  )
+  pendientes <- cam[!(firma_local %in% firma_remota), , drop = FALSE]
+  if (verbose) {
+    message(sprintf("Cambios: %d locales, %d en BD, %d pendientes.",
+                    nrow(cam), length(remotos), nrow(pendientes)))
+  }
+  if (!nrow(pendientes)) return(invisible(0L))
+  enviar_cambios_api(pendientes, verbose = verbose)
 }
 
 # Envia la cabecera de ejecucion de bitacora. Devuelve id_ejecucion remoto o NULL.
@@ -867,9 +1019,15 @@ enviar_ejecucion_bitacora_api <- function(fila) {
     mensajes_limpios = fila$mensajes_limpios,
     mensajes_excluidos = fila$mensajes_excluidos,
     emojis_pendientes = fila$emojis_pendientes %||% 0,
-    cambios_detectados = fila$cambios_detectados %||% "",
+    cambios_detectados = fila$cambios_detectados %||% ""
   )
-  resp <- tryCatch(.api_bitacora_post("/api/bitacora/ejecuciones", body), error = function(e) NULL)
+  resp <- tryCatch(
+    .api_bitacora_post("/api/bitacora/ejecuciones", body),
+    error = function(e) {
+      message("Ejecucion bitacora: no se pudo enviar a la API/BD: ", conditionMessage(e))
+      NULL
+    }
+  )
   if (is.null(resp)) return(invisible(NULL))
   invisible(resp$id_ejecucion %||% NULL)
 }
@@ -933,7 +1091,7 @@ enviar_experimento_bitacora_api <- function(fila) {
     resultado_principal = fila$resultado_principal %||% "",
     archivo_resultado = fila$archivo_resultado %||% "",
     notas = fila$notas %||% "",
-    responsable = fila$responsable %||% Sys.getenv("RESPONSABLE", ""),
+    responsable = fila$responsable %||% Sys.getenv("RESPONSABLE", "")
   )
   tryCatch(
     .api_bitacora_post("/api/bitacora/experimentos", body),

@@ -63,10 +63,10 @@ post_diccionario <- function(tipo, fila, timeout = 30) {
   httr2::resp_body_json(resp, simplifyVector = TRUE)
 }
 
-# Normaliza un valor: NA/NULL -> NULL para JSON
+# Normaliza un valor escalar: NA/NULL/length 0 -> NULL para JSON
 limpia <- function(x) {
-  if (is.null(x)) return(NULL)
-  if (length(x) == 0) return(NULL)
+  if (is.null(x) || length(x) == 0) return(NULL)
+  x <- x[1]
   if (is.na(x)) return(NULL)
   as.character(x)
 }
@@ -74,26 +74,126 @@ limpia <- function(x) {
 # Convierte columnas numericas; deja texto como esta
 as_num <- function(x) suppressWarnings(as.numeric(x))
 
+# Numero escalar o NULL (evita enviar numeric(0), que jsonlite serializa como [])
+num_o_null <- function(x) {
+  if (is.null(x) || length(x) == 0) return(NULL)
+  x <- suppressWarnings(as.numeric(x[1]))
+  if (is.na(x)) return(NULL)
+  x
+}
+
+# Logico escalar tolerante a true/false, 1/0, "si"/"no"; NA -> default
+logico_o_null <- function(x, default = TRUE) {
+  if (is.null(x) || length(x) == 0) return(default)
+  x <- x[1]
+  if (is.na(x)) return(default)
+  if (is.logical(x)) return(x)
+  v <- tolower(trimws(as.character(x)))
+  if (v %in% c("true", "t", "1", "si", "sí", "yes", "y")) return(TRUE)
+  if (v %in% c("false", "f", "0", "no", "n")) return(FALSE)
+  default
+}
+
+# Fuerza un vector a array JSON incluso con un solo elemento.
+# Sin I(), jsonlite + auto_unbox = TRUE convierte c("x") en "x" (escalar)
+# y Postgres rechaza el jsonb con "invalid input syntax for type json".
+como_array <- function(x) {
+  if (is.null(x) || length(x) == 0) return(NULL)
+  x <- as.character(unlist(x, use.names = FALSE))
+  x <- x[!is.na(x)]
+  if (!length(x)) return(NULL)
+  I(x)
+}
+
+# GET /api/diccionarios/:tipo -> lista de filas existentes
+get_diccionario <- function(tipo, limit = 500, timeout = 30) {
+  req <- httr2::request(paste0(api_url(), "/api/diccionarios/", tipo)) |>
+    httr2::req_url_query(limit = limit) |>
+    httr2::req_timeout(timeout)
+  resp <- api_perform(req)
+  httr2::resp_body_json(resp, simplifyVector = FALSE)$data
+}
+
+# PUT /api/diccionarios/:tipo/:id  (requiere x-api-key)
+put_diccionario <- function(tipo, id, fila, timeout = 30) {
+  req <- httr2::request(paste0(api_url(), "/api/diccionarios/", tipo, "/", id)) |>
+    httr2::req_headers(`x-api-key` = api_key()) |>
+    httr2::req_body_json(fila, auto_unbox = TRUE) |>
+    httr2::req_method("PUT") |>
+    httr2::req_timeout(timeout)
+  resp <- api_perform(req)
+  httr2::resp_body_json(resp, simplifyVector = TRUE)
+}
+
 migra_sentimientos <- function(dir_config) {
   cat("[Migraciones] sentimientos ...\n")
-  j <- jsonlite::fromJSON(file.path(dir_config, "sentimientos.json"), simplifyVector = TRUE)$sentimientos
-  for (i in seq_len(nrow(j))) {
+  # simplifyVector = FALSE evita que jsonlite convierta palabras/raices en
+  # data.frames o escalares cuando tienen distinta longitud o un solo elemento.
+  j <- jsonlite::fromJSON(file.path(dir_config, "sentimientos.json"),
+                          simplifyVector = FALSE)$sentimientos
+
+  existentes <- tryCatch(
+    get_diccionario("sentimientos"),
+    error = function(e) {
+      cat("  AVISO: no se pudieron leer los sentimientos existentes: ",
+          conditionMessage(e), "\n", sep = "")
+      list()
+    }
+  )
+  ids <- integer(0)
+  if (length(existentes)) {
+    ids <- vapply(existentes, function(x) as.integer(x$id), integer(1))
+    names(ids) <- vapply(existentes, function(x) as.character(x$nombre), character(1))
+  }
+
+  nuevos <- 0L; actualizados <- 0L; errores <- 0L
+  for (i in seq_along(j)) {
+    s <- j[[i]]
     fila <- list(
-      orden = as_num(j$orden[i]),
-      nombre = limpia(j$nombre[i]),
-      polaridad = as_num(j$polaridad[i]),
-      activo = if (is.null(j$activo[i]) || is.na(j$activo[i])) TRUE else as.logical(j$activo[i]),
-      definicion = limpia(j$definicion[i]),
-      palabras = if (is.null(j$palabras[[i]]) || length(j$palabras[[i]]) == 0) NULL else j$palabras[[i]],
-      raices = if (is.null(j$raices[[i]]) || length(j$raices[[i]]) == 0) NULL else j$raices[[i]]
+      orden = num_o_null(s$orden),
+      nombre = limpia(s$nombre),
+      polaridad = num_o_null(s$polaridad),
+      activo = logico_o_null(s$activo, default = TRUE),
+      definicion = limpia(s$definicion),
+      palabras = como_array(s$palabras),
+      raices = como_array(s$raices)
     )
-    r <- tryCatch(post_diccionario("sentimientos", fila), error = function(e) e)
+
+    if (is.null(fila$nombre) || is.null(fila$polaridad)) {
+      cat("  ERROR fila", i, ": 'nombre' y 'polaridad' son obligatorios\n")
+      errores <- errores + 1L
+      next
+    }
+
+    pos <- match(fila$nombre, names(ids))
+    id <- if (!is.na(pos)) ids[[pos]] else NULL
+    r <- tryCatch(
+      {
+        if (is.null(id)) {
+          post_diccionario("sentimientos", fila)
+          "nuevo"
+        } else {
+          put_diccionario("sentimientos", id, fila)
+          "actualizado"
+        }
+      },
+      error = function(e) e
+    )
+
     if (inherits(r, "error")) {
-      cat("  ERROR fila", i, ":", conditionMessage(r), "\n")
+      cat("  ERROR fila", i, ":", fila$nombre, ":", conditionMessage(r), "\n")
+      errores <- errores + 1L
+    } else if (identical(r, "actualizado")) {
+      cat("  OK (actualizado) fila", i, ":", fila$nombre, "\n")
+      actualizados <- actualizados + 1L
     } else {
-      cat("  OK fila", i, ":", j$nombre[i], "\n")
+      cat("  OK fila", i, ":", fila$nombre, "\n")
+      nuevos <- nuevos + 1L
     }
   }
+  cat(sprintf("[Migraciones] sentimientos: %d nuevos, %d actualizados, %d errores\n",
+              nuevos, actualizados, errores))
+  invisible(errores == 0L)
 }
 
 migra_emojis <- function(dir_config) {

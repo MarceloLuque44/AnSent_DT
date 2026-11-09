@@ -11,6 +11,7 @@ Sys.setenv(ANSENT_API_KEY = "784b578e8cd3fcf26996d65403775af39b42c37f423acdfe139
 # O mejor en ~/.Renviron:
 #   ANSENT_API_URL=https://tu-servicio.onrender.com
 #   ANSENT_API_KEY=tu_clave
+#   ANSENT_BITACORA_API=1   # opcional: activa la bitacora remota (requiere las tablas de docs/Esquemas/Esquema8.sql)
 if (!requireNamespace("httr2", quietly = TRUE)) {
   install.packages('httr2')
 }

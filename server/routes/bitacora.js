@@ -16,8 +16,6 @@ const esHora = (v) => typeof v === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(v);
 router.post('/ejecuciones', requireApiKey, async (req, res, next) => {
   try {
     const b = req.body ?? {};
-    console.error('[bitacora/ejecuciones] body keys:', Object.keys(b));
-    console.error('[bitacora/ejecuciones] body:', JSON.stringify(b));
 
     const fecha = esFecha(b.fecha) ? b.fecha : null;
     const hora_inicio = esHora(b.hora_inicio) ? b.hora_inicio : null;
@@ -27,7 +25,12 @@ router.post('/ejecuciones', requireApiKey, async (req, res, next) => {
     const archivo = String(b.archivo ?? '').trim();
     const archivo_md5 = String(b.archivo_md5 ?? '').trim();
     const evento = String(b.evento ?? '').trim();
-    const parametros = b.parametros != null ? JSON.stringify(b.parametros) : null;
+    const parametros =
+      b.parametros == null
+        ? null
+        : typeof b.parametros === 'string'
+          ? b.parametros
+          : JSON.stringify(b.parametros);
     const estado = String(b.estado ?? '').trim();
     const paso_donde_paro = String(b.paso_donde_paro ?? '').trim();
     const mensaje_error = String(b.mensaje_error ?? '').trim();
@@ -44,7 +47,6 @@ router.post('/ejecuciones', requireApiKey, async (req, res, next) => {
       registros_leidos, mensajes_limpios, mensajes_excluidos,
       emojis_pendientes, cambios_detectados,
     ];
-    console.error('[bitacora/ejecuciones] params count:', params.length, 'params:', JSON.stringify(params));
 
     const result = await query(
       `INSERT INTO public.ejecuciones
@@ -81,12 +83,6 @@ router.post('/ejecuciones/:id/pasos', requireApiKey, async (req, res, next) => {
 
     const body = req.body ?? {};
     const pasos = Array.isArray(body.pasos) ? body.pasos : [];
-    console.error('[bitacora/ejecuciones/:id/pasos] idEjecucion:', idEjecucion, 'pasos count:', pasos.length);
-    console.error('[bitacora/ejecuciones/:id/pasos] body keys:', Object.keys(body));
-    if (pasos.length > 0) {
-      console.error('[bitacora/ejecuciones/:id/pasos] first step keys:', Object.keys(pasos[0]));
-      console.error('[bitacora/ejecuciones/:id/pasos] first step:', JSON.stringify(pasos[0]));
-    }
     if (pasos.length === 0) {
       return res.status(400).json({ error: 'pasos debe ser un array no vacio' });
     }
@@ -105,9 +101,6 @@ router.post('/ejecuciones/:id/pasos', requireApiKey, async (req, res, next) => {
     ];
     const params = tipos.map((t, i) => `$${i + 2}::${t}[]`).join(', ');
     const values = [idEjecucion, ...columnas.map((c) => pasos.map((p) => p[c] ?? null))];
-    console.error('[bitacora/ejecuciones/:id/pasos] columnas:', columnas);
-    console.error('[bitacora/ejecuciones/:id/pasos] tipos:', tipos);
-    console.error('[bitacora/ejecuciones/:id/pasos] values count:', values.length, 'values:', JSON.stringify(values));
 
     await query(
       `INSERT INTO public.ejecucion_pasos (ejecucion_id, ${columnas.join(', ')})
@@ -130,8 +123,6 @@ router.post('/ejecuciones/:id/pasos', requireApiKey, async (req, res, next) => {
 router.post('/experimentos', requireApiKey, async (req, res, next) => {
   try {
     const b = req.body ?? {};
-    console.error('[bitacora/experimentos] body keys:', Object.keys(b));
-    console.error('[bitacora/experimentos] body:', JSON.stringify(b));
 
     const fecha = esFecha(b.fecha) ? b.fecha : null;
     const hora = esHora(b.hora) ? b.hora : null;
@@ -152,7 +143,6 @@ router.post('/experimentos', requireApiKey, async (req, res, next) => {
       metodo, parametros, n_documentos, tamano_vocabulario,
       resultado_principal, archivo_resultado, notas, responsable,
     ];
-    console.error('[bitacora/experimentos] params count:', params.length, 'params:', JSON.stringify(params));
 
     const result = await query(
       `INSERT INTO public.experimentos

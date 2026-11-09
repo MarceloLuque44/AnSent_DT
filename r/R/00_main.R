@@ -15,7 +15,7 @@
 #         y la carpeta `dir_bitacoras` (por defecto bitacoras/) con SOLO DOS archivos:
 #             bitacora_limpia.xlsx     pasos de la última ejecución exitosa
 #             bitacora_completa.xlsx   cambios (código y diccionarios), ejecuciones, pasos y experimentos
-#
+# Comentario
 # consola: "didactico" explica cada paso mientras trabaja | "resumen" una línea por paso | "silencioso"
 # ==============================================================================
 

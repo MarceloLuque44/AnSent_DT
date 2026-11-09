@@ -1,4 +1,3 @@
-asss
 source("cargar_proyecto.R")              # carga todas las herramientas (una vez)
 source("Peticiones.R")              # carga todas las herramientas (una vez)
 #res   <- preprocesar("data/result.json","") # UNA vez, con todo el dataset
