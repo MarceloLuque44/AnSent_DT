@@ -17,6 +17,7 @@
 # ==============================================================================
 
 # Configura antes de ejecutar:
+Sys.setenv(RESPONSABLE = "GRUPO13")
 Sys.setenv(ANSENT_API_URL = "http://localhost:3000")
 Sys.setenv(ANSENT_API_KEY = "784b578e8cd3fcf26996d65403775af39b42c37f423acdfe1397278549a28c81")
 #

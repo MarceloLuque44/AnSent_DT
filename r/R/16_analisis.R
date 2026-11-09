@@ -325,13 +325,150 @@ graficos_comparacion <- function(cmp) {
 }
 
 # ------------------------------------------------------------------------------
+# Helpers de envío a la API del dashboard (Postgres vía Node/Express).
+# No se reutiliza r/Peticiones.R porque no es sourceada por cargar_proyecto.R
+# y su final auto-ejecuta probar_conexion_api(); estos helpers viven aquí.
+# ------------------------------------------------------------------------------
+
+# URL base de la API (env var ANSENT_API_URL).
+.api_url <- function() {
+  u <- Sys.getenv("ANSENT_API_URL", "")
+  if (!nzchar(u)) {
+    stop("Define ANSENT_API_URL, por ejemplo http://localhost:3000", call. = FALSE)
+  }
+  sub("/+$", "", u)
+}
+
+# Clave de API (env var ANSENT_API_KEY, debe coincidir con R_API_KEY del servidor).
+.api_key <- function() {
+  k <- Sys.getenv("ANSENT_API_KEY", "")
+  if (!nzchar(k)) {
+    stop("Define ANSENT_API_KEY con la clave del servidor (R_API_KEY).", call. = FALSE)
+  }
+  k
+}
+
+# POST JSON con header x-api-key. Requiere httr2 (se instala bajo demanda si falta).
+.api_post <- function(path, body, timeout = 60) {
+  if (!requireNamespace("httr2", quietly = TRUE)) {
+    install.packages('httr2')
+  }
+  req <- httr2::request(paste0(.api_url(), path)) |>
+    httr2::req_headers(`x-api-key` = .api_key()) |>
+    httr2::req_body_json(body, auto_unbox = TRUE) |>
+    httr2::req_method("POST") |>
+    httr2::req_timeout(timeout)
+  resp <- httr2::req_perform(req)
+  if (httr2::resp_status(resp) >= 400) {
+    stop(
+      "API ", httr2::resp_status(resp), ": ",
+      httr2::resp_body_string(resp),
+      call. = FALSE
+    )
+  }
+  httr2::resp_body_json(resp, simplifyVector = TRUE)
+}
+
+# bloque común de periodo para los bodies de envío
+.periodo_body <- function(per) {
+  list(
+    nombre = per$nombre,
+    inicio = as.character(per$inicio),
+    fin    = as.character(per$fin)
+  )
+}
+
+# POST de niveles (un periodo): guarda analisis + analisis_nivel.
+enviar_niveles_api_equiv <- function(a, responsable = Sys.getenv("RESPONSABLE", "R local")) {
+  if (is.null(a$nivel) || !is.data.frame(a$nivel) || !nrow(a$nivel)) {
+    message("Niveles: sin datos para enviar a la API.")
+    return(invisible(NULL))
+  }
+  if (is.null(a$periodo)) {
+    message("Niveles: 'a$periodo' no definido; no se envia a la API.")
+    return(invisible(NULL))
+  }
+  niv <- a$nivel[, c("sentimiento", "nivel_pct", "mensajes_pct", "n_mensajes"), drop = FALSE]
+  body <- list(
+    periodo = .periodo_body(a$periodo),
+    n_mensajes  = a$n_mensajes,
+    responsable = responsable,
+    datos       = niv
+  )
+  .api_post("/api/dashboard/niveles", body)
+}
+
+# POST de serie mensual (un periodo): guarda analisis + analisis_serie_mensual.
+enviar_serie_api_equiv <- function(a, responsable = Sys.getenv("RESPONSABLE", "R local")) {
+  if (is.null(a$serie) || !is.data.frame(a$serie) || !nrow(a$serie)) {
+    message("Serie: sin datos para enviar a la API.")
+    return(invisible(NULL))
+  }
+  if (is.null(a$periodo)) {
+    message("Serie: 'a$periodo' no definido; no se envia a la API.")
+    return(invisible(NULL))
+  }
+  serie <- a$serie[, c("anio_mes", "sentimiento", "pct", "n_mensajes"), drop = FALSE]
+  body <- list(
+    periodo = .periodo_body(a$periodo),
+    n_mensajes  = a$n_mensajes,
+    responsable = responsable,
+    datos       = serie
+  )
+  .api_post("/api/dashboard/serie", body)
+}
+
+# POST de comparación (dos periodos): guarda analisis/analisis_nivel de ambos
+# periodos + cabecera en analisis_comparacion.
+enviar_comparacion_api_equiv <- function(cmp, responsable = Sys.getenv("RESPONSABLE", "R local")) {
+  if (!inherits(cmp, "comparacion_periodos")) {
+    message("Comparacion: objeto no valido para enviar a la API.")
+    return(invisible(NULL))
+  }
+  if (is.null(cmp$niveles) || !is.data.frame(cmp$niveles) || !nrow(cmp$niveles)) {
+    message("Comparacion: sin niveles para enviar a la API.")
+    return(invisible(NULL))
+  }
+
+  claves    <- names(cmp$periodos)
+  etiquetas <- vapply(cmp$periodos, function(p) p$nombre, character(1))
+
+  niveles <- cmp$niveles
+  niveles$periodo <- etiquetas[match(niveles$periodo, claves)]
+
+  periodos <- lapply(seq_along(cmp$periodos), function(i) {
+    p <- cmp$periodos[[i]]
+    n <- unique(niveles$n_mensajes[niveles$periodo == etiquetas[i]])
+    list(
+      clave      = claves[i],
+      nombre     = p$nombre,
+      inicio     = as.character(p$inicio),
+      fin        = as.character(p$fin),
+      n_mensajes = if (length(n)) n[1] else NA
+    )
+  })
+
+  body <- list(
+    nombre      = paste(etiquetas[1], "vs", etiquetas[2]),
+    responsable = responsable,
+    periodos    = periodos,
+    datos       = niveles[, c("sentimiento", "periodo", "nivel_pct",
+                              "mensajes_pct", "n_mensajes"), drop = FALSE]
+  )
+  .api_post("/api/dashboard/comparaciones", body)
+}
+
+# ------------------------------------------------------------------------------
 # guardar_analisis: guarda las tablas (CSV) y los graficos (PNG) de un analisis
 # en salida/analisis/<nombre_periodo>/ para que el dashboard los pueda leer.
 #
 # Parametros:
-#   a      : objeto "analisis_periodo" o "comparacion_periodos"
-#   dir    : carpeta base de salida (default "salida/analisis")
-#   graficos : si TRUE, tambien guarda los PNG de los graficos (default TRUE)
+#   a         : objeto "analisis_periodo" o "comparacion_periodos"
+#   dir       : carpeta base de salida (default "salida/analisis")
+#   graficos  : si TRUE, tambien guarda los PNG de los graficos (default TRUE)
+#   enviar_api: si TRUE, envia niveles/serie (o comparacion) a la API->BD
+#               envuelto en tryCatch (best-effort, default TRUE)
+#   responsable: quien ejecuta el analisis (default Sys.getenv("RESPONSABLE", "R local"))
 #
 # Retorna: ruta del directorio creado (invisible).
 #
@@ -347,7 +484,8 @@ graficos_comparacion <- function(cmp) {
 #   interpretacion.txt y PNG de comparacion.
 # ------------------------------------------------------------------------------
 # Deja las tablas (CSV) y los graficos (PNG) listos para que el dashboard los lea
-guardar_analisis <- function(a, dir = "salida/analisis", graficos = TRUE) {
+guardar_analisis <- function(a, dir = "salida/analisis", graficos = FALSE,
+                             enviar_api = TRUE, responsable = Sys.getenv("RESPONSABLE", "R local")) {
   # Nombre del directorio de salida basado en el periodo(s)
   nom <- if (inherits(a, "comparacion_periodos")) paste(a$periodos[[1]]$nombre, a$periodos[[2]]$nombre, sep = " vs ") else a$periodo$nombre
   d <- file.path(dir, gsub("[^A-Za-z0-9_-]+", "_", nom)); dir.create(d, recursive = TRUE, showWarnings = FALSE)
@@ -367,6 +505,21 @@ guardar_analisis <- function(a, dir = "salida/analisis", graficos = TRUE) {
   }
   # Guardar cada grafico como PNG con ggsave
   for (nm in names(gr)) try(.gg()$ggsave(file.path(d, paste0(nm, ".png")), gr[[nm]], width = 9, height = 6, dpi = 120), silent = TRUE)
+
+  # Envío a API/BD (best-effort: nunca bloquea el guardado local ni el retorno)
+  if (isTRUE(enviar_api)) {
+    tryCatch({
+      if (inherits(a, "comparacion_periodos")) {
+        enviar_comparacion_api_equiv(a, responsable = responsable)
+      } else {
+        enviar_niveles_api_equiv(a, responsable = responsable)
+        enviar_serie_api_equiv(a, responsable = responsable)
+      }
+    }, error = function(e) {
+      message("No se pudieron enviar los datos a la API/BD: ", conditionMessage(e))
+    })
+  }
+
   message("Analisis guardado en ", d)
   invisible(d)
 }
