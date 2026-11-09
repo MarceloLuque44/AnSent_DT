@@ -24,7 +24,7 @@ const OUTPUTS = {
     tabla: 'preprocesar_mensajes_limpios',
     columnas: ['id_mensaje', 'fecha', 'anio_mes', 'autor', 'tipo_contenido', 'texto_limpio', 'polaridad_msg', 'sentimiento_dominante', 'datos'],
     tipos: ['text', 'date', 'text', 'text', 'text', 'text', 'text', 'text', 'jsonb'],
-    postMax: POST_MAX,
+    postMax: 100000,
   },
   'mensajes-excluidos': {
     tabla: 'preprocesar_mensajes_excluidos',

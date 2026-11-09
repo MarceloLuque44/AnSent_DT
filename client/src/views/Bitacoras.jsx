@@ -218,7 +218,7 @@ export default function Bitacoras() {
   const seleccionarEjecucion = (id) => {
     setDetalleId(id);
     setCabecera(null);
-    outputs.current = {};
+    setOutputs({});
     setDetalleError(null);
     setDetalleCargando(true);
   };
@@ -226,7 +226,7 @@ export default function Bitacoras() {
   const cerrarDetalle = () => {
     setDetalleId(null);
     setCabecera(null);
-    outputs.current = {};
+    setOutputs({});
     setDetalleError(null);
     setDetalleCargando(false);
   };
@@ -300,7 +300,7 @@ export default function Bitacoras() {
     if (endpoint === 'resumen' || endpoint === 'emojis-pendientes') {
       claves.push(...(datos && typeof datos === 'object' && !Array.isArray(datos) ? Object.keys(datos) : []));
     } else {
-      const dyn = outputs.current[endpoint]?.claves ?? [];
+      const dyn = outputs[endpoint]?.claves ?? [];
       dyn.forEach((k) => { if (!claves.includes(k)) claves.push(k); });
     }
     return (
@@ -314,8 +314,8 @@ export default function Bitacoras() {
   };
 
   const cabecerasOutput = (endpoint) => {
-    const estado = outputs.current[endpoint];
-    const filas = estado ? estado.filas : [];
+    const estado = outputs[endpoint];
+    const filas = estado?.filas ?? [];
     const base = BASE_COLUMNAS[endpoint] ?? [];
     const claves = [...base];
     if (endpoint === 'resumen' || endpoint === 'emojis-pendientes') {
@@ -330,8 +330,8 @@ export default function Bitacoras() {
   };
 
   const renderResumen = () => {
-    const estado = outputs.current.resumen;
-    const filas = estado ? estado.filas : [];
+    const estado = outputs.resumen;
+    const filas = estado?.filas ?? [];
     if (filas.length === 0) return <p className="placeholder">Sin resumen para esta ejecucion.</p>;
     const d = filas[0].datos;
     if (!d || typeof d !== 'object' || Array.isArray(d)) return <p className="placeholder">Sin datos de resumen.</p>;
@@ -347,8 +347,8 @@ export default function Bitacoras() {
   };
 
   const renderPanelOutput = (endpoint) => {
-    const estado = outputs.current[endpoint];
-    const filas = estado ? estado.filas : [];
+    const estado = outputs[endpoint];
+    const filas = estado?.filas ?? [];
     const total = estado ? estado.total : 0;
     const pagina = estado ? estado.pagina : 1;
     const cabeceras = cabecerasOutput(endpoint);
