@@ -3,21 +3,21 @@
  * Solo se montan las vistas conectadas al nuevo backend.
  */
 import { useEffect, useState } from 'react';
-import Cambios from './views/Cambios.jsx';
+import Configuracion from './views/Configuracion.jsx';
 import Bitacoras from './views/Bitacoras.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Resultados from './views/Resultados.jsx';
 
 const VISTAS = {
   dashboard: Dashboard,
-  cambios: Cambios,
+  configuracion: Configuracion,
   bitacoras: Bitacoras,
   resultados: Resultados,
 };
 
 const NAVEGACION = [
   { id: 'dashboard', etiqueta: 'Dashboard', descripcion: 'Gráficos del análisis' },
-  { id: 'cambios', etiqueta: 'Cambios', descripcion: 'Registros desde R' },
+  { id: 'configuracion', etiqueta: 'Configuracion', descripcion: 'Diccionarios de configuracion' },
   { id: 'bitacoras', etiqueta: 'Bitácora', descripcion: 'Historial de cambios' },
   { id: 'resultados', etiqueta: 'Resultados analisis', descripcion: 'Niveles y serie de sentimientos guardados en BD' },
 ];

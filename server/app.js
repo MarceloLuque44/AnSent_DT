@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import cambiosRoutes from './routes/cambios.js';
+import diccionariosRoutes from './routes/diccionarios.js';
 import analisisRoutes from './routes/analisis.js';
 import preprocesarRoutes from './routes/preprocesar.js';
 import { query } from './db/pg.js';
@@ -30,6 +31,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/cambios', cambiosRoutes);
+app.use('/api/diccionarios', diccionariosRoutes);
 app.use('/api/dashboard', analisisRoutes);
 app.use('/api/preprocesar', preprocesarRoutes);
 

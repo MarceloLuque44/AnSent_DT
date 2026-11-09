@@ -46,3 +46,35 @@ export async function apiPut(path, body) {
   }
   return res.json();
 }
+
+export async function apiDelete(path) {
+  const res = await fetch(urlApi(path), { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Helpers específicos para diccionarios de configuracion (POSTGRES via /api/diccionarios/:tipo). */
+export function listarDiccionario(tipo, { limit = 100, offset = 0 } = {}) {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return apiGet(`/api/diccionarios/${tipo}?${qs.toString()}`);
+}
+
+export function obtenerDiccionario(tipo, id) {
+  return apiGet(`/api/diccionarios/${tipo}/${id}`);
+}
+
+export function guardarDiccionario(tipo, datos) {
+  return apiPost(`/api/diccionarios/${tipo}`, datos);
+}
+
+export function actualizarDiccionario(tipo, id, datos) {
+  return apiPut(`/api/diccionarios/${tipo}/${id}`, datos);
+}
+
+export function eliminarDiccionario(tipo, id) {
+  return apiDelete(`/api/diccionarios/${tipo}/${id}`);
+}
+
