@@ -66,6 +66,18 @@ export default function Dashboard() {
   const [cargandoSankey, setCargandoSankey] = useState(false);
   const [errorSankey, setErrorSankey] = useState(null);
 
+  const [datosGraficos, setDatosGraficos] = useState({
+    tfidf: [],
+    topicos: [],
+    topicos_tiempo: [],
+    upos: [],
+    nivel_mensaje: [],
+    calor: [],
+  });
+  const [periodoGraficos, setPeriodoGraficos] = useState(null);
+  const [cargandoGraficos, setCargandoGraficos] = useState(false);
+  const [errorGraficos, setErrorGraficos] = useState(null);
+
   const cargarPeriodos = useCallback(async () => {
     try {
       const resp = await apiGet('/api/dashboard/periodos');
@@ -165,6 +177,33 @@ export default function Dashboard() {
     }
   }, []);
 
+  const cargarGraficos = useCallback(async (nombre) => {
+    setCargandoGraficos(true);
+    setErrorGraficos(null);
+    try {
+      const ruta = nombre
+        ? `/api/dashboard/graficos?periodo=${encodeURIComponent(nombre)}`
+        : '/api/dashboard/graficos';
+      const resp = await apiGet(ruta);
+      const g = resp.graficos ?? {};
+      setDatosGraficos({
+        tfidf: Array.isArray(g.tfidf) ? g.tfidf : [],
+        topicos: Array.isArray(g.topicos) ? g.topicos : [],
+        topicos_tiempo: Array.isArray(g.topicos_tiempo) ? g.topicos_tiempo : [],
+        upos: Array.isArray(g.upos) ? g.upos : [],
+        nivel_mensaje: Array.isArray(g.nivel_mensaje) ? g.nivel_mensaje : [],
+        calor: Array.isArray(g.calor) ? g.calor : [],
+      });
+      setPeriodoGraficos(resp.periodo ?? null);
+    } catch (err) {
+      setErrorGraficos(err.message);
+      setDatosGraficos({ tfidf: [], topicos: [], topicos_tiempo: [], upos: [], nivel_mensaje: [], calor: [] });
+      setPeriodoGraficos(null);
+    } finally {
+      setCargandoGraficos(false);
+    }
+  }, []);
+
   useEffect(() => {
     cargarPeriodos();
     cargarComparaciones();
@@ -174,7 +213,8 @@ export default function Dashboard() {
     cargarNiveles(periodoActivo);
     cargarSerie(periodoActivo);
     cargarSankey(periodoActivo);
-  }, [cargarNiveles, cargarSerie, cargarSankey, periodoActivo]);
+    cargarGraficos(periodoActivo);
+  }, [cargarNiveles, cargarSerie, cargarSankey, cargarGraficos, periodoActivo]);
 
   useEffect(() => {
     cargarDetalleComp(comparacionActiva);
@@ -573,6 +613,275 @@ export default function Dashboard() {
     };
   }, [datosSankey, periodoSankey]);
 
+  // ---- g_tfidf: terminos mas distintivos (TF-IDF) ----
+  const opcionTfidf = useMemo(() => {
+    if (!datosGraficos.tfidf.length) return null;
+    const filas = [...datosGraficos.tfidf]
+      .sort((a, b) => Number(b.tf_idf) - Number(a.tf_idf))
+      .slice(0, 40);
+    const docs = [...new Set(filas.map((f) => f.doc))];
+    const colorPorDoc = new Map(docs.map((d, i) => [d, COLORES_TIEMPO[i % COLORES_TIEMPO.length]]));
+    return {
+      ...opcionBase('Terminos mas distintivos (TF-IDF)', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => {
+          const f = filas[p.dataIndex];
+          return [`<b>${f.token}</b> — ${f.doc}`, `TF-IDF: ${Number(f.tf_idf).toFixed(3)}`, `n: ${f.n}`, `tf: ${Number(f.tf).toFixed(3)}`, `idf: ${Number(f.idf).toFixed(3)}`].join('<br/>');
+        },
+      },
+      xAxis: {
+        type: 'value',
+        name: 'TF-IDF',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: filas.map((f) => `${f.token} — ${f.doc}`),
+        inverse: true,
+        axisLabel: { color: '#12263f', fontSize: 10 },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: 'bar',
+          name: 'TF-IDF',
+          data: filas.map((f) => ({
+            value: Number(f.tf_idf),
+            itemStyle: { color: colorPorDoc.get(f.doc) },
+          })),
+          barMaxWidth: 20,
+          label: { show: true, position: 'right', formatter: ({ value }) => value.toFixed(3), color: '#12263f', fontSize: 9 },
+        },
+      ],
+    };
+  }, [datosGraficos.tfidf, periodoGraficos]);
+
+  // ---- g_topicos: terminos de cada topico (LDA) ----
+  const opcionTopicos = useMemo(() => {
+    if (!datosGraficos.topicos.length) return null;
+    const filas = [...datosGraficos.topicos]
+      .sort((a, b) => Number(b.beta) - Number(a.beta))
+      .slice(0, 40);
+    const topicos = [...new Set(filas.map((f) => f.topico))];
+    const colorPorTopico = new Map(topicos.map((t, i) => [t, COLORES_TIEMPO[i % COLORES_TIEMPO.length]]));
+    return {
+      ...opcionBase('Topicos (LDA): terminos mas probables', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => {
+          const f = filas[p.dataIndex];
+          return [`<b>${f.termino}</b> — ${f.topico}: ${f.etiqueta}`, `beta: ${Number(f.beta).toFixed(4)}`].join('<br/>');
+        },
+      },
+      xAxis: {
+        type: 'value',
+        name: 'beta (probabilidad)',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => v.toFixed(4), color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: filas.map((f) => `${f.termino} — ${f.topico}: ${f.etiqueta}`),
+        inverse: true,
+        axisLabel: { color: '#12263f', fontSize: 10 },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: 'bar',
+          name: 'beta',
+          data: filas.map((f) => ({
+            value: Number(f.beta),
+            itemStyle: { color: colorPorTopico.get(f.topico) },
+          })),
+          barMaxWidth: 20,
+          label: { show: true, position: 'right', formatter: ({ value }) => value.toFixed(3), color: '#12263f', fontSize: 9 },
+        },
+      ],
+    };
+  }, [datosGraficos.topicos, periodoGraficos]);
+
+  // ---- g_topicos_tiempo: peso de cada topico en el tiempo ----
+  const opcionTopicosTiempo = useMemo(() => {
+    if (!datosGraficos.topicos_tiempo.length) return null;
+    const paneles = [...new Set(datosGraficos.topicos_tiempo.map((d) => `${d.topico}: ${d.etiqueta}`))];
+    const meses = [...new Set(datosGraficos.topicos_tiempo.map((d) => d.anio_mes))].sort();
+    const porPanel = new Map(paneles.map((p) => [p, []]));
+    datosGraficos.topicos_tiempo.forEach((d) => porPanel.get(`${d.topico}: ${d.etiqueta}`).push({ value: [d.anio_mes, Number(d.peso_pct)] }));
+    return {
+      ...opcionBase('Peso de cada topico por mes', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      legend: { bottom: 0, data: paneles, textStyle: { color: '#5a7392' } },
+      xAxis: {
+        type: 'category',
+        data: meses,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: '% del mes',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      series: paneles.map((p, i) => ({
+        name: p,
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: porPanel.get(p),
+        lineStyle: { width: 2 },
+        itemStyle: { color: COLORES_TIEMPO[i % COLORES_TIEMPO.length] },
+      })),
+    };
+  }, [datosGraficos.topicos_tiempo, periodoGraficos]);
+
+  // ---- g_upos: categorias gramaticales (shallow linguistic) ----
+  const opcionUpos = useMemo(() => {
+    if (!datosGraficos.upos.length) return null;
+    const filas = [...datosGraficos.upos].sort((a, b) => Number(b.pct) - Number(a.pct));
+    return {
+      ...opcionBase('Categorias gramaticales (shallow linguistic)', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${formatearPct(p.value)}` },
+      xAxis: {
+        type: 'value',
+        name: '% de las palabras',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: filas.map((f) => f.clase),
+        inverse: true,
+        axisLabel: { color: '#12263f' },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: 'bar',
+          name: 'pct',
+          data: filas.map((f) => Number(f.pct)),
+          barMaxWidth: 22,
+          itemStyle: { color: '#7030A0', borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: 'right', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+        },
+      ],
+    };
+  }, [datosGraficos.upos, periodoGraficos]);
+
+  // ---- g_nivel_mensaje: mensaje representante frente a su periodo ----
+  const opcionNivelMensaje = useMemo(() => {
+    if (!datosGraficos.nivel_mensaje.length) return null;
+    const sentimientos = datosGraficos.nivel_mensaje.map((d) => d.sentimiento);
+    return {
+      ...opcionBase('Nivel del mensaje frente a su periodo', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params) => {
+          const p = params[0];
+          const f = datosGraficos.nivel_mensaje.find((d) => d.sentimiento === p.name) ?? {};
+          return [`<b>${p.name}</b>`, `Mensaje: ${formatearPct(p.value)}`, `Periodo: ${formatearPct(Number(f.periodo_pct))}`].join('<br/>');
+        },
+      },
+      grid: { left: 130, right: 70, top: 72, bottom: 34 },
+      xAxis: {
+        type: 'value',
+        name: '%',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+        max: 100,
+      },
+      yAxis: {
+        type: 'category',
+        inverse: true,
+        data: sentimientos,
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        axisLabel: { color: '#12263f' },
+      },
+      series: [
+        {
+          name: 'Mensaje',
+          type: 'bar',
+          data: datosGraficos.nivel_mensaje.map((d) => Number(d.mensaje_pct)),
+          barMaxWidth: 22,
+          itemStyle: { color: '#2A9D8F', borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: 'right', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+        },
+        {
+          name: 'Periodo',
+          type: 'bar',
+          data: datosGraficos.nivel_mensaje.map((d) => Number(d.periodo_pct)),
+          barMaxWidth: 22,
+          itemStyle: { color: '#8E5572', borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: 'right', formatter: ({ value }) => formatearPct(value), color: '#12263f', fontWeight: 600 },
+        },
+      ],
+    };
+  }, [datosGraficos.nivel_mensaje, periodoGraficos]);
+
+  // ---- g_calor: mapa de calor dia de la semana x hora ----
+  const ORDEN_DIAS = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+  const opcionCalor = useMemo(() => {
+    if (!datosGraficos.calor.length) return null;
+    const diasPresentes = ORDEN_DIAS.filter((d) => datosGraficos.calor.some((c) => c.dia === d));
+    const diaIndex = new Map(diasPresentes.map((d, i) => [d, i]));
+    const horas = [...Array(24).keys()].map(String);
+    const maxFreq = Math.max(...datosGraficos.calor.map((c) => Number(c.freq)));
+    return {
+      ...opcionBase('Actividad del grupo: dia de la semana x hora', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => `Dia: ${p.value[1] === undefined ? diasPresentes[p.data[1]] : diasPresentes[p.value[1]]}<br/>Hora: ${p.value[0]}:00<br/>Mensajes: ${p.value[2]}`,
+      },
+      xAxis: {
+        type: 'category',
+        data: horas.map((h) => `${h}:00`),
+        name: 'hora',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: diasPresentes,
+        name: 'dia',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#12263f' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      visualMap: {
+        min: 0,
+        max: maxFreq,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 10,
+        inRange: { color: ['#f7fbff', '#08306b'] },
+        textStyle: { color: '#5a7392' },
+      },
+      series: [
+        {
+          name: 'mensajes',
+          type: 'heatmap',
+          data: datosGraficos.calor.map((c) => [Number(c.hora), diaIndex.get(c.dia), Number(c.freq)]),
+          label: { show: false },
+          emphasis: { itemStyle: { borderWidth: 1, borderColor: '#333' } },
+        },
+      ],
+    };
+  }, [datosGraficos.calor, periodoGraficos]);
+
   const hayDatos = datos.length > 0;
 
   return (
@@ -715,6 +1024,90 @@ export default function Dashboard() {
                 Ejecuta <code>enviar_niveles_api(a)</code> desde R para subir el
                 cruce tópico x sentimiento dominante del periodo.
               </p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Terminos mas distintivos (TF-IDF)">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Terminos mas distintivos (TF-IDF)</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionTfidf && (
+              <EChart option={opcionTfidf} height={520} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionTfidf && datosGraficos.tfidf.length === 0 && (
+              <p className="placeholder">Sin datos de TF-IDF para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Topicos (LDA) terminos">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Topicos (LDA): terminos mas probables</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionTopicos && (
+              <EChart option={opcionTopicos} height={520} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionTopicos && datosGraficos.topicos.length === 0 && (
+              <p className="placeholder">Sin datos de topicos para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Peso de topicos en el tiempo">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Peso de cada topico por mes</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionTopicosTiempo && (
+              <EChart option={opcionTopicosTiempo} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionTopicosTiempo && datosGraficos.topicos_tiempo.length === 0 && (
+              <p className="placeholder">Sin datos de topicos en el tiempo para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Categorias gramaticales">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Categorias gramaticales (shallow linguistic)</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionUpos && (
+              <EChart option={opcionUpos} height={400} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionUpos && datosGraficos.upos.length === 0 && (
+              <p className="placeholder">Sin datos de shallow linguistic para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Nivel del mensaje frente al periodo">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Nivel del mensaje frente a su periodo</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionNivelMensaje && (
+              <EChart option={opcionNivelMensaje} height={420} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionNivelMensaje && datosGraficos.nivel_mensaje.length === 0 && (
+              <p className="placeholder">Sin datos de nivel de mensaje para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Mapa de calor actividad">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Actividad: dia de la semana x hora</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionCalor && (
+              <EChart option={opcionCalor} height={420} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionCalor && datosGraficos.calor.length === 0 && (
+              <p className="placeholder">Sin datos de calor para este periodo.</p>
             )}
           </section>
         )}

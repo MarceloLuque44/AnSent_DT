@@ -187,6 +187,93 @@ enviar_niveles_api <- function(a, responsable = Sys.getenv("RESPONSABLE", "R loc
 }
 
 # ==============================================================================
+# enviar_graficos_api(): manda los graficos #9-14 al backend
+# POST /api/dashboard/graficos (un solo POST, cada grafico opcional)
+# ==============================================================================
+enviar_graficos_api <- function(a, responsable = Sys.getenv("RESPONSABLE", "R local")) {
+  if (is.null(a$periodo)) {
+    stop("'a' debe ser la salida de analizar_periodo().", call. = FALSE)
+  }
+
+  .post <- function(path, body, timeout = 60) {
+    req <- httr2::request(paste0(api_url(), path)) |>
+      httr2::req_headers(`x-api-key` = api_key()) |>
+      httr2::req_body_json(body, auto_unbox = TRUE) |>
+      httr2::req_method("POST") |>
+      httr2::req_timeout(timeout)
+    resp <- api_perform(req)
+    httr2::resp_body_json(resp, simplifyVector = TRUE)
+  }
+
+  periodo <- list(
+    nombre = a$periodo$nombre,
+    inicio = as.character(a$periodo$inicio),
+    fin    = as.character(a$periodo$fin)
+  )
+
+  graficos <- list()
+
+  # --- 9. TF-IDF --------------------------------------------------------------
+  if (!is.null(a$tfidf) && nrow(a$tfidf)) {
+    graficos$tfidf <- a$tfidf[, c("doc", "token", "n", "tf", "idf", "tf_idf"), drop = FALSE]
+  }
+
+  # --- 10. Topicos (terminos) -------------------------------------------------
+  if (!is.null(a$topicos) && !is.null(a$topicos$terminos) && nrow(a$topicos$terminos)) {
+    graficos$topicos <- a$topicos$terminos[, c("topico", "etiqueta", "termino", "beta"), drop = FALSE]
+  }
+
+  # --- 11. Topicos en el tiempo (peso_mes) ------------------------------------
+  if (!is.null(a$topicos) && !is.null(a$topicos$peso_mes) && nrow(a$topicos$peso_mes)) {
+    graficos$topicos_tiempo <- a$topicos$peso_mes[, c("anio_mes", "topico", "etiqueta", "peso_pct"), drop = FALSE]
+  }
+
+  # --- 12. Shallow linguistic (upos) ------------------------------------------
+  if (!is.null(a$shallow) && !is.null(a$shallow$upos) && nrow(a$shallow$upos)) {
+    graficos$upos <- a$shallow$upos[, c("clase", "n", "pct"), drop = FALSE]
+  }
+
+  # --- 13. Nivel de mensaje representante -------------------------------------
+  m <- a$mensajes
+  if (!is.null(m) && nrow(m)) {
+    ej <- if ("hits_total" %in% names(m)) m[which.max(m$hits_total), , drop = FALSE] else m[1, , drop = FALSE]
+    graficos$nivel_mensaje <- nivel_mensaje(ej, m)
+  }
+
+  # --- 14. Calor (dia_semana x hora) ------------------------------------------
+  if (!is.null(m) && nrow(m) && all(c("dia_semana", "hora") %in% names(m))) {
+    cal <- as.data.frame.table(
+      table(dia = m$dia_semana, hora = m$hora),
+      stringsAsFactors = FALSE
+    )
+    cal <- cal[cal$Freq > 0, , drop = FALSE]
+    names(cal) <- c("dia", "hora", "freq")
+    cal$hora <- as.integer(as.character(cal$hora))
+    cal$freq <- as.integer(as.character(cal$freq))
+    if (nrow(cal)) {
+      graficos$calor <- cal
+    }
+  }
+
+  body <- list(
+    periodo = periodo,
+    n_mensajes  = a$n_mensajes,
+    responsable = responsable,
+    graficos    = graficos
+  )
+
+  tryCatch({
+    guardado <- .post("/api/dashboard/graficos", body)
+    n <- sum(vapply(graficos, nrow, integer(1)))
+    message("Graficos enviados: ", n, " filas totales")
+    guardado
+  }, error = function(e) {
+    message("No se pudieron enviar los graficos: ", conditionMessage(e))
+    invisible(NULL)
+  })
+}
+
+# ==============================================================================
 # enviar_comparacion_api(): manda cmp$niveles (dos periodos) para el gráfico
 # de barras agrupadas. POST /api/dashboard/comparaciones
 # ==============================================================================
@@ -258,8 +345,10 @@ probar_conexion_api()
 if (exists("a") && inherits(a, "analisis_periodo")) {
   guardado <- enviar_niveles_api(a)
   print(guardado)
+  guardado_graficos <- tryCatch(enviar_graficos_api(a), error = function(e) message("Graficos: ", conditionMessage(e)))
+  print(guardado_graficos)
 } else {
-  message("Crea 'a' con analizar_periodo() y luego ejecuta enviar_niveles_api(a).")
+  message("Crea 'a' con analizar_periodo() y luego ejecuta enviar_niveles_api(a) y enviar_graficos_api(a).")
 }
 
 # Con una comparación ya calculada, sube los dos periodos al dashboard:

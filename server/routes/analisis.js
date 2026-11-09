@@ -674,12 +674,236 @@ router.get('/sankey', async (req, res, next) => {
       [a.id_analisis]
     );
 
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ok: true,
+    periodo: { nombre: a.nombre, inicio: a.fecha_inicio, fin: a.fecha_fin },
+    n_mensajes: a.n_mensajes,
+    datos: sankey.rows,
+  });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Reemplaza las filas hijas de un gráfico para un id_analisis dado.
+ * `columnas` y `tipos` deben tener la misma longitud y orden que las filas.
+ */
+async function reemplazarGrafico(ejecutar, idAnalisis, tabla, columnas, tipos, filas) {
+  await ejecutar(`DELETE FROM public.${tabla} WHERE id_analisis = $1`, [idAnalisis]);
+  const cols = columnas.join(', ');
+  const params = columnas.map((_, i) => `$${i + 2}::${tipos[i]}[]`).join(', ');
+  await ejecutar(
+    `INSERT INTO public.${tabla} (id_analisis, ${cols})
+     SELECT $1, * FROM unnest(${params})`,
+    [idAnalisis, ...columnas.map((c) => filas.map((f) => f[c] ?? null))]
+  );
+}
+
+/**
+ * POST /api/dashboard/graficos
+ * Recibe todos los gráficos opcionales de una vez en body.graficos.
+ * Cada gráfico es independiente: null o array vacío se salta.
+ *
+ * Body:
+ * {
+ *   periodo: { nombre, inicio: "YYYY-MM-DD", fin: "YYYY-MM-DD" },
+ *   n_mensajes, responsable,
+ *   graficos: {
+ *     tfidf: [{ doc, token, n, tf, idf, tf_idf }],
+ *     topicos: [{ topico, etiqueta, termino, beta }],
+ *     topicos_tiempo: [{ anio_mes, topico, etiqueta, peso_pct }],
+ *     upos: [{ clase, n, pct }],
+ *     nivel_mensaje: [{ sentimiento, mensaje_pct, periodo_pct }],
+ *     calor: [{ dia, hora, freq }]
+ *   }
+ * }
+ */
+router.post('/graficos', requireApiKey, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const periodo = body.periodo ?? {};
+
+    const errPeriodo = validarPeriodo(periodo);
+    if (errPeriodo) {
+      return res.status(400).json({ error: errPeriodo });
+    }
+
+    const graficos = body.graficos ?? {};
+    if (!graficos || typeof graficos !== 'object') {
+      return res.status(400).json({ error: 'graficos debe ser un objeto' });
+    }
+
+    const cabecera = await upsertCabecera(query, periodo, body.n_mensajes, body.responsable);
+    const idAnalisis = cabecera.rows[0].id_analisis;
+
+    const graficosGuardados = {};
+
+    if (Array.isArray(graficos.tfidf) && graficos.tfidf.length) {
+      const filas = graficos.tfidf.map((d) => ({
+        doc: String(d.doc ?? '').trim(),
+        token: String(d.token ?? '').trim(),
+        n: aNumero(d.n),
+        tf: aNumero(d.tf),
+        idf: aNumero(d.idf),
+        tf_idf: aNumero(d.tf_idf),
+      }));
+      const invalida = filas.find((f) => !f.doc || !f.token || f.n === null || f.tf === null || f.idf === null || f.tf_idf === null);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila tfidf invalida: doc, token y numericos requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_tfidf',
+        ['doc', 'token', 'n', 'tf', 'idf', 'tf_idf'],
+        ['text', 'text', 'int', 'numeric', 'numeric', 'numeric'],
+        filas);
+      graficosGuardados.tfidf = filas.length;
+    }
+
+    if (Array.isArray(graficos.topicos) && graficos.topicos.length) {
+      const filas = graficos.topicos.map((d) => ({
+        topico: String(d.topico ?? '').trim(),
+        etiqueta: String(d.etiqueta ?? '').trim(),
+        termino: String(d.termino ?? '').trim(),
+        beta: aNumero(d.beta),
+      }));
+      const invalida = filas.find((f) => !f.topico || !f.etiqueta || !f.termino || f.beta === null);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila topicos invalida: topico, etiqueta, termino y beta requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_topicos',
+        ['topico', 'etiqueta', 'termino', 'beta'],
+        ['text', 'text', 'text', 'numeric'],
+        filas);
+      graficosGuardados.topicos = filas.length;
+    }
+
+    if (Array.isArray(graficos.topicos_tiempo) && graficos.topicos_tiempo.length) {
+      const filas = graficos.topicos_tiempo.map((d) => ({
+        anio_mes: String(d.anio_mes ?? '').trim(),
+        topico: String(d.topico ?? '').trim(),
+        etiqueta: String(d.etiqueta ?? '').trim(),
+        peso_pct: aNumero(d.peso_pct),
+      }));
+      const invalida = filas.find((f) => !f.anio_mes || !f.topico || !f.etiqueta || f.peso_pct === null);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila topicos_tiempo invalida: anio_mes, topico, etiqueta y peso_pct requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_topicos_tiempo',
+        ['anio_mes', 'topico', 'etiqueta', 'peso_pct'],
+        ['text', 'text', 'text', 'numeric'],
+        filas);
+      graficosGuardados.topicos_tiempo = filas.length;
+    }
+
+    if (Array.isArray(graficos.upos) && graficos.upos.length) {
+      const filas = graficos.upos.map((d) => ({
+        clase: String(d.clase ?? '').trim(),
+        n: aNumero(d.n),
+        pct: aNumero(d.pct),
+      }));
+      const invalida = filas.find((f) => !f.clase || f.n === null || f.pct === null);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila upos invalida: clase, n y pct requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_upos',
+        ['clase', 'n', 'pct'],
+        ['text', 'int', 'numeric'],
+        filas);
+      graficosGuardados.upos = filas.length;
+    }
+
+    if (Array.isArray(graficos.nivel_mensaje) && graficos.nivel_mensaje.length) {
+      const filas = graficos.nivel_mensaje.map((d) => ({
+        sentimiento: String(d.sentimiento ?? '').trim(),
+        mensaje_pct: aNumero(d.mensaje_pct),
+        periodo_pct: aNumero(d.periodo_pct),
+      }));
+      const invalida = filas.find((f) => !f.sentimiento || f.mensaje_pct === null || f.periodo_pct === null);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila nivel_mensaje invalida: sentimiento, mensaje_pct y periodo_pct requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_nivel_mensaje',
+        ['sentimiento', 'mensaje_pct', 'periodo_pct'],
+        ['text', 'numeric', 'numeric'],
+        filas);
+      graficosGuardados.nivel_mensaje = filas.length;
+    }
+
+    if (Array.isArray(graficos.calor) && graficos.calor.length) {
+      const filas = graficos.calor.map((d) => ({
+        dia: String(d.dia ?? '').trim(),
+        hora: aNumero(d.hora),
+        freq: aNumero(d.freq),
+      }));
+      const invalida = filas.find((f) => !f.dia || f.hora === null || f.freq === null || f.hora < 0 || f.hora > 23);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila calor invalida: dia, hora (0-23) y freq requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_calor',
+        ['dia', 'hora', 'freq'],
+        ['text', 'int', 'int'],
+        filas);
+      graficosGuardados.calor = filas.length;
+    }
+
+    res.status(201).json({ ok: true, id_analisis: idAnalisis, graficos: graficosGuardados });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/dashboard/graficos?periodo=<nombre>
+ * Devuelve { ok, periodo, n_mensajes, graficos: { tfidf, topicos, topicos_tiempo, upos, nivel_mensaje, calor } }.
+ */
+router.get('/graficos', async (req, res, next) => {
+  try {
+    const { periodo } = req.query;
+
+    const cabecera = await query(
+      `SELECT id_analisis, nombre, fecha_inicio, fecha_fin, n_mensajes
+       FROM public.analisis
+       ${periodo ? 'WHERE nombre = $1' : ''}
+       ORDER BY creado_en DESC, id_analisis DESC
+       LIMIT 1`,
+      periodo ? [String(periodo)] : []
+    );
+
+    if (cabecera.rows.length === 0) {
+      return res.json({
+        ok: true,
+        periodo: null,
+        n_mensajes: null,
+        graficos: { tfidf: [], topicos: [], topicos_tiempo: [], upos: [], nivel_mensaje: [], calor: [] },
+      });
+    }
+
+    const a = cabecera.rows[0];
+    const idAnalisis = a.id_analisis;
+
+    const [tfidf, topicos, topicosTiempo, upos, nivelMensaje, calor] = await Promise.all([
+      query(`SELECT doc, token, n, tf, idf, tf_idf FROM public.analisis_grafico_tfidf WHERE id_analisis = $1 ORDER BY doc, token`, [idAnalisis]),
+      query(`SELECT topico, etiqueta, termino, beta FROM public.analisis_grafico_topicos WHERE id_analisis = $1 ORDER BY topico, termino`, [idAnalisis]),
+      query(`SELECT anio_mes, topico, etiqueta, peso_pct FROM public.analisis_grafico_topicos_tiempo WHERE id_analisis = $1 ORDER BY anio_mes, topico`, [idAnalisis]),
+      query(`SELECT clase, n, pct FROM public.analisis_grafico_upos WHERE id_analisis = $1 ORDER BY n DESC`, [idAnalisis]),
+      query(`SELECT sentimiento, mensaje_pct, periodo_pct FROM public.analisis_grafico_nivel_mensaje WHERE id_analisis = $1 ORDER BY sentimiento`, [idAnalisis]),
+      query(`SELECT dia, hora, freq FROM public.analisis_grafico_calor WHERE id_analisis = $1 ORDER BY dia, hora`, [idAnalisis]),
+    ]);
+
     res.set('Cache-Control', 'no-store');
     res.json({
       ok: true,
       periodo: { nombre: a.nombre, inicio: a.fecha_inicio, fin: a.fecha_fin },
       n_mensajes: a.n_mensajes,
-      datos: sankey.rows,
+      graficos: {
+        tfidf: tfidf.rows,
+        topicos: topicos.rows,
+        topicos_tiempo: topicosTiempo.rows,
+        upos: upos.rows,
+        nivel_mensaje: nivelMensaje.rows,
+        calor: calor.rows,
+      },
     });
   } catch (err) {
     next(err);
