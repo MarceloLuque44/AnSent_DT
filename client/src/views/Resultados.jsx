@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api.js';
 
+const PAGE_SIZE = 10;
+
 const etiquetaSentimiento = (s) =>
   String(s)
     .replace(/_/g, ' ')
@@ -8,6 +10,93 @@ const etiquetaSentimiento = (s) =>
 
 const formatearPct = (valor) => `${Number(valor).toFixed(1)}%`;
 const texto = (v) => (v == null || v === '' ? '—' : String(v));
+
+/**
+ * Filtra filas por rango de fechas usando la columna indicada (YYYY-MM o YYYY-MM-DD).
+ */
+const filtrarPorFechas = (filas, claveFecha, desde, hasta) => {
+  if (!desde && !hasta) return filas;
+  const dDesde = desde ? new Date(desde) : null;
+  const dHasta = hasta ? new Date(hasta + 'T23:59:59') : null;
+  return filas.filter((f) => {
+    const v = f[claveFecha];
+    if (v == null) return true;
+    const d = new Date(String(v).includes('-') && String(v).length >= 7 ? `${String(v)}-01` : String(v));
+    if (isNaN(d.getTime())) return true;
+    if (dDesde && d < dDesde) return false;
+    if (dHasta && d > dHasta) return false;
+    return true;
+  });
+};
+
+/** Panel desplegable (accordion). */
+function Panel({ clave, titulo, abierto, alternar, children }) {
+  return (
+    <section className="panel-grafico" aria-label={clave}>
+      <div
+        className="panel-cabecera"
+        onClick={alternar}
+        onKeyDown={(e) => e.key === 'Enter' && alternar()}
+        role="button"
+        tabIndex={0}
+        aria-expanded={abierto}
+        aria-controls={clave}
+      >
+        <h2 className="panel-titulo">{titulo}</h2>
+        <span className="panel-indicador">{abierto ? '▼' : '▶'}</span>
+      </div>
+      {abierto && children}
+    </section>
+  );
+}
+
+/** Tabla paginada (muestra PAGE_SIZE filas por página). */
+function TablaPaginada({ filas, cabeceras, filasRenderer, clave, pagina, setPagina }) {
+  const total = filas.length;
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const p = Math.min(Math.max(1, pagina), totalPaginas);
+  const inicio = (p - 1) * PAGE_SIZE;
+  const pageRows = filas.slice(inicio, inicio + PAGE_SIZE);
+
+  return (
+    <>
+      {total > 0 && (
+        <div className="tabla-scroll">
+          <table className="tabla">
+            <thead>
+              <tr>{cabeceras.map((c) => <th key={c}>{c}</th>)}</tr>
+            </thead>
+            <tbody>
+              {pageRows.map((f, i) => filasRenderer(f, i + inicio, clave))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {total > PAGE_SIZE && (
+        <div className="paginacion">
+          <button
+            type="button"
+            className="btn-pag"
+            disabled={p === 1}
+            onClick={() => setPagina(p - 1)}
+          >
+            Anterior
+          </button>
+          <span className="pagina-actual">Página {p} de {totalPaginas} · {total} registros</span>
+          <button
+            type="button"
+            className="btn-pag"
+            disabled={p === totalPaginas}
+            onClick={() => setPagina(p + 1)}
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
+      {total === 0 && <p className="placeholder">Sin registros para mostrar.</p>}
+    </>
+  );
+}
 
 /**
  * Resultados análisis: lee de Postgres lo que guardar_analisis() envió desde R.
@@ -29,11 +118,28 @@ export default function Resultados() {
   const [comparacionActiva, setComparacionActiva] = useState('');
   const [detalleComp, setDetalleComp] = useState(null);
 
+  const [abiertos, setAbiertos] = useState(new Set(['niveles']));
+  const [paginaNiveles, setPaginaNiveles] = useState(1);
+  const [paginaSerie, setPaginaSerie] = useState(1);
+  const [paginaComp, setPaginaComp] = useState(1);
+
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [errorNiveles, setErrorNiveles] = useState(null);
   const [errorSerie, setErrorSerie] = useState(null);
   const [errorComp, setErrorComp] = useState(null);
+
+  const alternarPanel = (clave) => {
+    setAbiertos((prev) => {
+      const next = new Set(prev);
+      if (next.has(clave)) next.delete(clave);
+      else next.add(clave);
+      return next;
+    });
+  };
 
   const cargarPeriodos = useCallback(async () => {
     try {
@@ -140,6 +246,18 @@ export default function Resultados() {
     };
   }, [detalleComp]);
 
+  const nivelesFiltrados = datosNiveles;
+
+  const serieFiltrada = useMemo(
+    () => filtrarPorFechas(datosSerie, 'anio_mes', fechaDesde, fechaHasta),
+    [datosSerie, fechaDesde, fechaHasta]
+  );
+
+  const comparacionesFiltradas = useMemo(
+    () => filtrarPorFechas(comparaciones, 'creado_en', fechaDesde, fechaHasta),
+    [comparaciones, fechaDesde, fechaHasta]
+  );
+
   const cargarTodo = useCallback(async () => {
     setCargando(true);
     setError(null);
@@ -151,6 +269,8 @@ export default function Resultados() {
       setCargando(false);
     }
   }, [cargarPeriodos, cargarComparaciones]);
+
+  const hayDatos = datosNiveles.length > 0 || datosSerie.length > 0 || comparaciones.length > 0;
 
   return (
     <div>
@@ -193,107 +313,119 @@ export default function Resultados() {
         </label>
       )}
 
+      <div className="filtros-fechas">
+        <label>
+          Desde
+          <input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+          />
+        </label>
+        <label>
+          Hasta
+          <input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+          />
+        </label>
+        <button type="button" className="btn" onClick={() => { setFechaDesde(''); setFechaHasta(''); }}>
+          Limpiar filtros
+        </button>
+      </div>
+
       {/* Niveles de sentimientos por periodo */}
-      <section className="panel-grafico" aria-label="Nivel de sentimientos por periodo">
-        <div className="panel-grafico-cabecera">
-          <h2 className="panel-grafico-titulo">
-            Nivel de sentimientos ({texto(periodoInfo?.nombre) || 'último análisis'})
-          </h2>
-          {periodoInfo && (
-            <span className="page-desc">
-              {periodoInfo.inicio} → {periodoInfo.fin} · {texto(periodoInfo.n_mensajes)} mensajes
-            </span>
-          )}
-        </div>
+      <Panel
+        clave="niveles"
+        titulo={`Nivel de sentimientos (${texto(periodoInfo?.nombre) || 'último análisis'})`}
+        abierto={abiertos.has('niveles')}
+        alternar={() => alternarPanel('niveles')}
+      >
+        {periodoInfo && (
+          <p className="page-desc">
+            {periodoInfo.inicio} → {periodoInfo.fin} · {texto(periodoInfo.n_mensajes)} mensajes
+          </p>
+        )}
         {errorNiveles && <div className="estado-error">No se pudieron cargar los niveles: {errorNiveles}</div>}
-        {!errorNiveles && datosNiveles.length === 0 && (
+        {!errorNiveles && nivelesFiltrados.length === 0 && (
           <p className="placeholder">Sin niveles de sentimientos para este periodo.</p>
         )}
-        {datosNiveles.length > 0 && (
-          <div className="tabla-scroll">
-            <table className="tabla">
-              <thead>
-                <tr>
-                  <th>Sentimiento</th>
-                  <th>Nivel</th>
-                  <th>Mensajes con el sentimiento</th>
-                  <th>n mensajes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datosNiveles.map((f) => (
-                  <tr key={`${f.sentimiento}||${periodoActivo}`}>
-                    <td>{etiquetaSentimiento(f.sentimiento)}</td>
-                    <td>{formatearPct(f.nivel_pct)}</td>
-                    <td>{formatearPct(f.mensajes_pct)}</td>
-                    <td>{texto(f.n_mensajes)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {!errorNiveles && nivelesFiltrados.length > 0 && (
+          <TablaPaginada
+            filas={nivelesFiltrados}
+            cabeceras={['Sentimiento', 'Nivel', 'Mensajes con el sentimiento', 'n mensajes']}
+            filasRenderer={(f) => (
+              <tr key={`${f.sentimiento}||${periodoActivo}`}>
+                <td>{etiquetaSentimiento(f.sentimiento)}</td>
+                <td>{formatearPct(f.nivel_pct)}</td>
+                <td>{formatearPct(f.mensajes_pct)}</td>
+                <td>{texto(f.n_mensajes)}</td>
+              </tr>
+            )}
+            clave="niveles"
+            pagina={paginaNiveles}
+            setPagina={setPaginaNiveles}
+          />
         )}
-      </section>
+      </Panel>
 
       {/* Serie mensual de sentimientos */}
-      <section className="panel-grafico" aria-label="Serie mensual de sentimientos">
-        <div className="panel-grafico-cabecera">
-          <h2 className="panel-grafico-titulo">Serie mensual de sentimientos</h2>
-        </div>
+      <Panel
+        clave="serie"
+        titulo="Serie mensual de sentimientos"
+        abierto={abiertos.has('serie')}
+        alternar={() => alternarPanel('serie')}
+      >
         {errorSerie && <div className="estado-error">No se pudo cargar la serie: {errorSerie}</div>}
-        {!errorSerie && datosSerie.length === 0 && (
+        {!errorSerie && serieFiltrada.length === 0 && (
           <p className="placeholder">Sin serie mensual para este periodo.</p>
         )}
-        {datosSerie.length > 0 && (
-          <div className="tabla-scroll">
-            <table className="tabla">
-              <thead>
-                <tr>
-                  <th>Mes</th>
-                  <th>Sentimiento</th>
-                  <th>%</th>
-                  <th>n mensajes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datosSerie.map((f) => (
-                  <tr key={`${f.anio_mes}||${f.sentimiento}`}>
-                    <td>{texto(f.anio_mes)}</td>
-                    <td>{etiquetaSentimiento(f.sentimiento)}</td>
-                    <td>{formatearPct(f.pct)}</td>
-                    <td>{texto(f.n_mensajes)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {!errorSerie && serieFiltrada.length > 0 && (
+          <TablaPaginada
+            filas={serieFiltrada}
+            cabeceras={['Mes', 'Sentimiento', '%', 'n mensajes']}
+            filasRenderer={(f) => (
+              <tr key={`${f.anio_mes}||${f.sentimiento}`}>
+                <td>{texto(f.anio_mes)}</td>
+                <td>{etiquetaSentimiento(f.sentimiento)}</td>
+                <td>{formatearPct(f.pct)}</td>
+                <td>{texto(f.n_mensajes)}</td>
+              </tr>
+            )}
+            clave="serie"
+            pagina={paginaSerie}
+            setPagina={setPaginaSerie}
+          />
         )}
-      </section>
+      </Panel>
 
       {/* Comparación de periodos */}
-      <section className="panel-grafico bloque-comparacion" aria-label="Comparación de periodos">
-        <div className="panel-grafico-cabecera">
-          <h2 className="panel-grafico-titulo">Comparación de periodos</h2>
-          {comparaciones.length > 0 && (
-            <label className="selector-periodo">
-              <span>Comparación</span>
-              <select
-                value={comparacionActiva}
-                onChange={(e) => setComparacionActiva(e.target.value)}
-              >
-                {comparaciones.map((c) => (
-                  <option key={c.id_comparacion} value={String(c.id_comparacion)}>
-                    {c.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+      <Panel
+        clave="comparacion"
+        titulo="Comparación de periodos"
+        abierto={abiertos.has('comparacion')}
+        alternar={() => alternarPanel('comparacion')}
+      >
+        {comparacionesFiltradas.length > 0 && (
+          <label className="selector-periodo">
+            <span>Comparación</span>
+            <select
+              value={comparacionActiva}
+              onChange={(e) => setComparacionActiva(e.target.value)}
+            >
+              {comparacionesFiltradas.map((c) => (
+                <option key={c.id_comparacion} value={String(c.id_comparacion)}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {errorComp && comparacionActiva && (
           <div className="estado-error">No se pudo cargar la comparación: {errorComp}</div>
         )}
-        {!errorComp && comparaciones.length === 0 && (
+        {!errorComp && comparacionesFiltradas.length === 0 && (
           <p className="placeholder">
             Ejecuta <code>enviar_comparacion_api(cmp)</code> desde R para comparar
             dos periodos.
@@ -304,33 +436,31 @@ export default function Resultados() {
             <p className="page-desc">
               {detalleComp.comparacion.nombre} · {texto(detalleComp.creado_en)}
             </p>
-            <div className="tabla-scroll">
-              <table className="tabla">
-                <thead>
-                  <tr>
-                    <th>Sentimiento</th>
-                    <th>{filasComparacion.periodos[0]?.nombre || 'A'}</th>
-                    <th>{filasComparacion.periodos[1]?.nombre || 'B'}</th>
-                    <th>Diferencia (B - A)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filasComparacion.filas.map((f) => (
-                    <tr key={f.sentimiento}>
-                      <td>{etiquetaSentimiento(f.sentimiento)}</td>
-                      <td>{f.a != null ? formatearPct(f.a) : '—'}</td>
-                      <td>{f.b != null ? formatearPct(f.b) : '—'}</td>
-                      <td>
-                        {f.a != null && f.b != null ? (f.b - f.a).toFixed(1) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TablaPaginada
+              filas={filasComparacion.filas}
+              cabeceras={[
+                'Sentimiento',
+                filasComparacion.periodos[0]?.nombre || 'A',
+                filasComparacion.periodos[1]?.nombre || 'B',
+                'Diferencia (B - A)',
+              ]}
+              filasRenderer={(f) => (
+                <tr key={f.sentimiento}>
+                  <td>{etiquetaSentimiento(f.sentimiento)}</td>
+                  <td>{f.a != null ? formatearPct(f.a) : '—'}</td>
+                  <td>{f.b != null ? formatearPct(f.b) : '—'}</td>
+                  <td>
+                    {f.a != null && f.b != null ? (f.b - f.a).toFixed(1) : '—'}
+                  </td>
+                </tr>
+              )}
+              clave="comparacion"
+              pagina={paginaComp}
+              setPagina={setPaginaComp}
+            />
           </>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }
