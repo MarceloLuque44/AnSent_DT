@@ -847,6 +847,192 @@ router.post('/graficos', requireApiKey, async (req, res, next) => {
       graficosGuardados.calor = filas.length;
     }
 
+    // --- 15. Volumen -----------------------------------------------------------
+    if (Array.isArray(graficos.volumen) && graficos.volumen.length) {
+      const filas = graficos.volumen.map((d) => ({
+        fecha: String(d.fecha ?? '').trim(),
+        freq: aNumero(d.freq),
+      }));
+      const invalida = filas.find((f) => !esFecha(f.fecha) || f.freq === null || f.freq < 0);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila volumen invalida: fecha (YYYY-MM-DD) y freq >= 0 requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_volumen',
+        ['fecha', 'freq'],
+        ['date', 'int'],
+        filas);
+      graficosGuardados.volumen = filas.length;
+    }
+
+    // --- 16. Evolucion anual --------------------------------------------------
+    if (Array.isArray(graficos.evolucion_anual) && graficos.evolucion_anual.length) {
+      const filas = graficos.evolucion_anual.map((d) => ({
+        anio: aNumero(d.anio),
+        sentimiento: String(d.sentimiento ?? '').trim(),
+        pct: aNumero(d.pct),
+      }));
+      const invalida = filas.find(
+        (f) => f.anio === null || f.anio < 1000 || f.anio > 9999 || !f.sentimiento || f.pct === null || f.pct < 0 || f.pct > 100
+      );
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila evolucion_anual invalida: anio, sentimiento y pct (0-100) requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_evolucion_anual',
+        ['anio', 'sentimiento', 'pct'],
+        ['int', 'text', 'numeric'],
+        filas);
+      graficosGuardados.evolucion_anual = filas.length;
+    }
+
+    // --- 17. Sent heat ---------------------------------------------------------
+    if (Array.isArray(graficos.sent_heat) && graficos.sent_heat.length) {
+      const filas = graficos.sent_heat.map((d) => ({
+        fecha: String(d.fecha ?? '').trim(),
+        sentimiento: String(d.sentimiento ?? '').trim(),
+        pct: aNumero(d.pct),
+      }));
+      const invalida = filas.find((f) => !esFecha(f.fecha) || !f.sentimiento || f.pct === null || f.pct < 0 || f.pct > 100);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila sent_heat invalida: fecha, sentimiento y pct (0-100) requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_sent_heat',
+        ['fecha', 'sentimiento', 'pct'],
+        ['date', 'text', 'numeric'],
+        filas);
+      graficosGuardados.sent_heat = filas.length;
+    }
+
+    // --- 18. Dominante ---------------------------------------------------------
+    if (Array.isArray(graficos.dominante) && graficos.dominante.length) {
+      const filas = graficos.dominante.map((d) => ({
+        fecha: String(d.fecha ?? '').trim(),
+        dom: String(d.dom ?? '').trim(),
+        freq: aNumero(d.freq),
+      }));
+      const invalida = filas.find((f) => !esFecha(f.fecha) || !f.dom || f.freq === null || f.freq < 0);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila dominante invalida: fecha, dom y freq >= 0 requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_dominante',
+        ['fecha', 'dom', 'freq'],
+        ['date', 'text', 'int'],
+        filas);
+      graficosGuardados.dominante = filas.length;
+    }
+
+    // --- 19. Polaridad tiempo --------------------------------------------------
+    if (Array.isArray(graficos.polaridad_tiempo) && graficos.polaridad_tiempo.length) {
+      const filas = graficos.polaridad_tiempo.map((d) => ({
+        fecha: String(d.fecha ?? '').trim(),
+        cat: String(d.cat ?? '').trim(),
+        freq: aNumero(d.freq),
+      }));
+      const invalida = filas.find((f) => !esFecha(f.fecha) || !f.cat || f.freq === null || f.freq < 0);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila polaridad_tiempo invalida: fecha, cat y freq >= 0 requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_polaridad_tiempo',
+        ['fecha', 'cat', 'freq'],
+        ['date', 'text', 'int'],
+        filas);
+      graficosGuardados.polaridad_tiempo = filas.length;
+    }
+
+    // --- 20. Sent hora heat ----------------------------------------------------
+    if (Array.isArray(graficos.sent_hora_heat) && graficos.sent_hora_heat.length) {
+      const filas = graficos.sent_hora_heat.map((d) => ({
+        hora: aNumero(d.hora),
+        sentimiento: String(d.sentimiento ?? '').trim(),
+        pct: aNumero(d.pct),
+      }));
+      const invalida = filas.find(
+        (f) => f.hora === null || f.hora < 0 || f.hora > 23 || !f.sentimiento || f.pct === null || f.pct < 0 || f.pct > 100
+      );
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila sent_hora_heat invalida: hora (0-23), sentimiento y pct (0-100) requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_sent_hora_heat',
+        ['hora', 'sentimiento', 'pct'],
+        ['int', 'text', 'numeric'],
+        filas);
+      graficosGuardados.sent_hora_heat = filas.length;
+    }
+
+    // --- 21. Correlacion -------------------------------------------------------
+    if (Array.isArray(graficos.correlacion) && graficos.correlacion.length) {
+      const filas = graficos.correlacion.map((d) => ({
+        a: String(d.a ?? '').trim(),
+        b: String(d.b ?? '').trim(),
+        r: aNumero(d.r),
+      }));
+      const invalida = filas.find((f) => !f.a || !f.b || f.r === null || f.r < -1 || f.r > 1);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila correlacion invalida: a, b y r (-1 a 1) requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_correlacion',
+        ['a', 'b', 'r'],
+        ['text', 'text', 'numeric'],
+        filas);
+      graficosGuardados.correlacion = filas.length;
+    }
+
+    // --- 22. Palabras ----------------------------------------------------------
+    if (Array.isArray(graficos.palabras) && graficos.palabras.length) {
+      const filas = graficos.palabras.map((d) => ({
+        palabra: String(d.palabra ?? '').trim(),
+        n: aNumero(d.n),
+      }));
+      const invalida = filas.find((f) => !f.palabra || f.n === null || f.n < 0);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila palabras invalida: palabra y n >= 0 requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_palabras',
+        ['palabra', 'n'],
+        ['text', 'int'],
+        filas);
+      graficosGuardados.palabras = filas.length;
+    }
+
+    // --- 23. Emojis ------------------------------------------------------------
+    if (Array.isArray(graficos.emojis) && graficos.emojis.length) {
+      const filas = graficos.emojis.map((d) => ({
+        emoji: String(d.emoji ?? '').trim(),
+        n: aNumero(d.n),
+        sentimiento: String(d.sentimiento ?? '').trim(),
+        etiqueta: String(d.etiqueta ?? '').trim(),
+      }));
+      const invalida = filas.find((f) => !f.emoji || f.n === null || f.n < 0 || !f.sentimiento || !f.etiqueta);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila emojis invalida: emoji, n >= 0, sentimiento y etiqueta requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_emojis',
+        ['emoji', 'n', 'sentimiento', 'etiqueta'],
+        ['text', 'int', 'text', 'text'],
+        filas);
+      graficosGuardados.emojis = filas.length;
+    }
+
+    // --- 24. Libreria vs propios -----------------------------------------------
+    if (Array.isArray(graficos.libreria_vs_propios) && graficos.libreria_vs_propios.length) {
+      const filas = graficos.libreria_vs_propios.map((d) => ({
+        polaridad: String(d.polaridad ?? '').trim(),
+        fuente: String(d.fuente ?? '').trim(),
+        pct: aNumero(d.pct),
+      }));
+      const invalida = filas.find((f) => !f.polaridad || !f.fuente || f.pct === null || f.pct < 0 || f.pct > 100);
+      if (invalida) {
+        return res.status(400).json({ error: 'Fila libreria_vs_propios invalida: polaridad, fuente y pct (0-100) requeridos' });
+      }
+      await reemplazarGrafico(query, idAnalisis, 'analisis_grafico_libreria_vs_propios',
+        ['polaridad', 'fuente', 'pct'],
+        ['text', 'text', 'numeric'],
+        filas);
+      graficosGuardados.libreria_vs_propios = filas.length;
+    }
+
+    // G25 diferencia se envia por separado (requiere cmp de dos periodos).
+    graficosGuardados.diferencia = 0;
+
     res.status(201).json({ ok: true, id_analisis: idAnalisis, graficos: graficosGuardados });
   } catch (err) {
     next(err);
@@ -882,13 +1068,25 @@ router.get('/graficos', async (req, res, next) => {
     const a = cabecera.rows[0];
     const idAnalisis = a.id_analisis;
 
-    const [tfidf, topicos, topicosTiempo, upos, nivelMensaje, calor] = await Promise.all([
+    const [tfidf, topicos, topicosTiempo, upos, nivelMensaje, calor,
+      volumen, evolucionAnual, sentHeat, dominante, polaridadTiempo,
+      sentHoraHeat, correlacion, palabras, emojis, libreriaVsPropios] = await Promise.all([
       query(`SELECT doc, token, n, tf, idf, tf_idf FROM public.analisis_grafico_tfidf WHERE id_analisis = $1 ORDER BY doc, token`, [idAnalisis]),
       query(`SELECT topico, etiqueta, termino, beta FROM public.analisis_grafico_topicos WHERE id_analisis = $1 ORDER BY topico, termino`, [idAnalisis]),
       query(`SELECT anio_mes, topico, etiqueta, peso_pct FROM public.analisis_grafico_topicos_tiempo WHERE id_analisis = $1 ORDER BY anio_mes, topico`, [idAnalisis]),
       query(`SELECT clase, n, pct FROM public.analisis_grafico_upos WHERE id_analisis = $1 ORDER BY n DESC`, [idAnalisis]),
       query(`SELECT sentimiento, mensaje_pct, periodo_pct FROM public.analisis_grafico_nivel_mensaje WHERE id_analisis = $1 ORDER BY sentimiento`, [idAnalisis]),
       query(`SELECT dia, hora, freq FROM public.analisis_grafico_calor WHERE id_analisis = $1 ORDER BY dia, hora`, [idAnalisis]),
+      query(`SELECT fecha, freq FROM public.analisis_grafico_volumen WHERE id_analisis = $1 ORDER BY fecha`, [idAnalisis]),
+      query(`SELECT anio, sentimiento, pct FROM public.analisis_grafico_evolucion_anual WHERE id_analisis = $1 ORDER BY anio, sentimiento`, [idAnalisis]),
+      query(`SELECT fecha, sentimiento, pct FROM public.analisis_grafico_sent_heat WHERE id_analisis = $1 ORDER BY fecha, sentimiento`, [idAnalisis]),
+      query(`SELECT fecha, dom, freq FROM public.analisis_grafico_dominante WHERE id_analisis = $1 ORDER BY fecha, dom`, [idAnalisis]),
+      query(`SELECT fecha, cat, freq FROM public.analisis_grafico_polaridad_tiempo WHERE id_analisis = $1 ORDER BY fecha, cat`, [idAnalisis]),
+      query(`SELECT hora, sentimiento, pct FROM public.analisis_grafico_sent_hora_heat WHERE id_analisis = $1 ORDER BY hora, sentimiento`, [idAnalisis]),
+      query(`SELECT a, b, r FROM public.analisis_grafico_correlacion WHERE id_analisis = $1 ORDER BY a, b`, [idAnalisis]),
+      query(`SELECT palabra, n FROM public.analisis_grafico_palabras WHERE id_analisis = $1 ORDER BY n DESC`, [idAnalisis]),
+      query(`SELECT emoji, n, sentimiento, etiqueta FROM public.analisis_grafico_emojis WHERE id_analisis = $1 ORDER BY n DESC`, [idAnalisis]),
+      query(`SELECT polaridad, fuente, pct FROM public.analisis_grafico_libreria_vs_propios WHERE id_analisis = $1 ORDER BY polaridad, fuente`, [idAnalisis]),
     ]);
 
     res.set('Cache-Control', 'no-store');
@@ -903,6 +1101,17 @@ router.get('/graficos', async (req, res, next) => {
         upos: upos.rows,
         nivel_mensaje: nivelMensaje.rows,
         calor: calor.rows,
+        volumen: volumen.rows,
+        evolucion_anual: evolucionAnual.rows,
+        sent_heat: sentHeat.rows,
+        dominante: dominante.rows,
+        polaridad_tiempo: polaridadTiempo.rows,
+        sent_hora_heat: sentHoraHeat.rows,
+        correlacion: correlacion.rows,
+        palabras: palabras.rows,
+        emojis: emojis.rows,
+        libreria_vs_propios: libreriaVsPropios.rows,
+        diferencia: [],
       },
     });
   } catch (err) {

@@ -74,6 +74,19 @@ export default function Dashboard() {
     nivel_mensaje: [],
     calor: [],
   });
+  const [datosGraficosAdicionales, setDatosGraficosAdicionales] = useState({
+    volumen: [],
+    evolucion_anual: [],
+    sent_heat: [],
+    dominante: [],
+    polaridad_tiempo: [],
+    sent_hora_heat: [],
+    correlacion: [],
+    palabras: [],
+    emojis: [],
+    libreria_vs_propios: [],
+    diferencia: [],
+  });
   const [periodoGraficos, setPeriodoGraficos] = useState(null);
   const [cargandoGraficos, setCargandoGraficos] = useState(false);
   const [errorGraficos, setErrorGraficos] = useState(null);
@@ -193,6 +206,19 @@ export default function Dashboard() {
         upos: Array.isArray(g.upos) ? g.upos : [],
         nivel_mensaje: Array.isArray(g.nivel_mensaje) ? g.nivel_mensaje : [],
         calor: Array.isArray(g.calor) ? g.calor : [],
+      });
+      setDatosGraficosAdicionales({
+        volumen: Array.isArray(g.volumen) ? g.volumen : [],
+        evolucion_anual: Array.isArray(g.evolucion_anual) ? g.evolucion_anual : [],
+        sent_heat: Array.isArray(g.sent_heat) ? g.sent_heat : [],
+        dominante: Array.isArray(g.dominante) ? g.dominante : [],
+        polaridad_tiempo: Array.isArray(g.polaridad_tiempo) ? g.polaridad_tiempo : [],
+        sent_hora_heat: Array.isArray(g.sent_hora_heat) ? g.sent_hora_heat : [],
+        correlacion: Array.isArray(g.correlacion) ? g.correlacion : [],
+        palabras: Array.isArray(g.palabras) ? g.palabras : [],
+        emojis: Array.isArray(g.emojis) ? g.emojis : [],
+        libreria_vs_propios: Array.isArray(g.libreria_vs_propios) ? g.libreria_vs_propios : [],
+        diferencia: Array.isArray(g.diferencia) ? g.diferencia : [],
       });
       setPeriodoGraficos(resp.periodo ?? null);
     } catch (err) {
@@ -882,6 +908,444 @@ export default function Dashboard() {
     };
   }, [datosGraficos.calor, periodoGraficos]);
 
+  // ---- g_volumen: volumen de mensajes en el tiempo ----
+  const opcionVolumen = useMemo(() => {
+    if (!datosGraficosAdicionales.volumen.length) return null;
+    const filas = [...datosGraficosAdicionales.volumen].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+    const fechas = filas.map((f) => f.fecha);
+    return {
+      ...opcionBase('Volumen de mensajes en el tiempo', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'axis', formatter: (p) => `${p[0].name}: ${p[0].value} mensajes` },
+      xAxis: {
+        type: 'category',
+        data: fechas,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'mensajes',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      series: [{
+        name: 'Volumen',
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: filas.map((f) => Number(f.freq)),
+        areaStyle: {},
+        itemStyle: { color: '#3A86FF' },
+        lineStyle: { color: '#3A86FF', width: 2 },
+      }],
+    };
+  }, [datosGraficosAdicionales.volumen, periodoGraficos]);
+
+  // ---- g_evolucion_anual: sentimientos por ano ----
+  const opcionEvolucionAnual = useMemo(() => {
+    if (!datosGraficosAdicionales.evolucion_anual.length) return null;
+    const sentimientos = [...new Set(datosGraficosAdicionales.evolucion_anual.map((d) => d.sentimiento))];
+    const anios = [...new Set(datosGraficosAdicionales.evolucion_anual.map((d) => String(d.anio)))].sort();
+    const porSent = new Map(sentimientos.map((s) => [s, []]));
+    datosGraficosAdicionales.evolucion_anual.forEach((d) => porSent.get(d.sentimiento).push({ value: [String(d.anio), Number(d.pct)] }));
+    return {
+      ...opcionBase('Evolucion de los sentimientos por ano', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      legend: { bottom: 0, data: sentimientos, textStyle: { color: '#5a7392' } },
+      xAxis: {
+        type: 'category',
+        data: anios,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: '% promedio por mensaje',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      series: sentimientos.map((s, i) => ({
+        name: s,
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: porSent.get(s),
+        lineStyle: { width: 2 },
+        itemStyle: { color: COLORES_TIEMPO[i % COLORES_TIEMPO.length] },
+      })),
+    };
+  }, [datosGraficosAdicionales.evolucion_anual, periodoGraficos]);
+
+  // ---- g_sent_heat: mapa de calor sentimiento x tiempo ----
+  const opcionSentHeat = useMemo(() => {
+    if (!datosGraficosAdicionales.sent_heat.length) return null;
+    const sentimientos = [...new Set(datosGraficosAdicionales.sent_heat.map((d) => d.sentimiento))];
+    const fechas = [...new Set(datosGraficosAdicionales.sent_heat.map((d) => d.fecha))].sort();
+    const fIdx = new Map(fechas.map((f, i) => [f, i]));
+    const sIdx = new Map(sentimientos.map((s, i) => [s, i]));
+    const maxPct = Math.max(...datosGraficosAdicionales.sent_heat.map((d) => Number(d.pct)));
+    return {
+      ...opcionBase('Mapa de calor emocional por tiempo', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `Fecha: ${p.value[0]}<br/>Sentimiento: ${p.value[1]}<br/>Promedio: ${Number(p.value[2]).toFixed(1)}%` },
+      xAxis: {
+        type: 'category',
+        data: fechas,
+        axisLabel: { color: '#5a7392', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: sentimientos,
+        axisLabel: { color: '#12263f' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      visualMap: {
+        min: 0,
+        max: maxPct,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 10,
+        inRange: { color: ['#f7fbff', '#08306b'] },
+        textStyle: { color: '#5a7392' },
+      },
+      series: [{
+        name: 'pct',
+        type: 'heatmap',
+        data: datosGraficosAdicionales.sent_heat.map((d) => [fIdx.get(d.fecha), sIdx.get(d.sentimiento), Number(d.pct)]),
+        label: { show: false },
+      }],
+    };
+  }, [datosGraficosAdicionales.sent_heat, periodoGraficos]);
+
+  // ---- g_dominante: emocion dominante por fecha (apilada al 100 %) ----
+  const opcionDominante = useMemo(() => {
+    if (!datosGraficosAdicionales.dominante.length) return null;
+    const filas = datosGraficosAdicionales.dominante;
+    const doms = [...new Set(filas.map((d) => d.dom))];
+    const fechas = [...new Set(filas.map((d) => d.fecha))].sort();
+    const totales = new Map();
+    filas.forEach((d) => { totales.set(d.fecha, (totales.get(d.fecha) || 0) + Number(d.freq)); });
+    const indice = new Map(filas.map((d, i) => [`${d.fecha}||${d.dom}`, i]));
+    const colorPorDom = new Map(doms.map((s, i) => [s, COLORES_TIEMPO[i % COLORES_TIEMPO.length]]));
+    return {
+      ...opcionBase('Emocion dominante por fecha', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { bottom: 0, data: doms, textStyle: { color: '#5a7392' } },
+      xAxis: {
+        type: 'category',
+        data: fechas,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: '%',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v.toFixed(0)}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+        max: 100,
+      },
+      series: doms.map((s, i) => ({
+        name: s,
+        type: 'bar',
+        stack: 'total',
+        data: fechas.map((f) => {
+          const idx = indice.get(`${f}||${s}`);
+          const fila = idx != null ? filas[idx] : null;
+          const freq = fila ? Number(fila.freq) : 0;
+          const total = totales.get(f) || 1;
+          return freq / total * 100;
+        }),
+        itemStyle: { color: colorPorDom.get(s) },
+      })),
+    };
+  }, [datosGraficosAdicionales.dominante, periodoGraficos]);
+
+  // ---- g_polaridad_tiempo: polaridad por fecha (apilada al 100 %) ----
+  const opcionPolaridadTiempo = useMemo(() => {
+    if (!datosGraficosAdicionales.polaridad_tiempo.length) return null;
+    const filas = datosGraficosAdicionales.polaridad_tiempo;
+    const gatos = ['positivo', 'neutral', 'negativo', 'sin sentimiento detectado'];
+    const fechas = [...new Set(filas.map((d) => d.fecha))].sort();
+    const totales = new Map();
+    filas.forEach((d) => { totales.set(d.fecha, (totales.get(d.fecha) || 0) + Number(d.freq)); });
+    const indice = new Map(filas.map((d, i) => [`${d.fecha}||${d.cat}`, i]));
+    const colores = { positivo: '#2A9D8F', neutral: '#E9C46A', negativo: '#E76F51', 'sin sentimiento detectado': '#9aa5b1' };
+    return {
+      ...opcionBase('Polaridad de los mensajes por fecha', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { bottom: 0, data: gatos, textStyle: { color: '#5a7392' } },
+      xAxis: {
+        type: 'category',
+        data: fechas,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: '%',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v.toFixed(0)}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+        max: 100,
+      },
+      series: gatos.map((s, i) => ({
+        name: s,
+        type: 'bar',
+        stack: 'total',
+        data: fechas.map((f) => {
+          const idx = indice.get(`${f}||${s}`);
+          const fila = idx != null ? filas[idx] : null;
+          const freq = fila ? Number(fila.freq) : 0;
+          const total = totales.get(f) || 1;
+          return freq / total * 100;
+        }),
+        itemStyle: { color: colores[s] },
+      })),
+    };
+  }, [datosGraficosAdicionales.polaridad_tiempo, periodoGraficos]);
+
+  // ---- g_sent_hora_heat: mapa de calor sentimiento x hora ----
+  const opcionSentHoraHeat = useMemo(() => {
+    if (!datosGraficosAdicionales.sent_hora_heat.length) return null;
+    const sentimientos = [...new Set(datosGraficosAdicionales.sent_hora_heat.map((d) => d.sentimiento))];
+    const horas = [...Array(24).keys()].map(String);
+    const hIdx = new Map(horas.map((h, i) => [h, i]));
+    const sIdx = new Map(sentimientos.map((s, i) => [s, i]));
+    const maxPct = Math.max(...datosGraficosAdicionales.sent_hora_heat.map((d) => Number(d.pct)));
+    return {
+      ...opcionBase('Sentimiento promedio por hora del dia', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `Hora: ${p.value[0]}:00<br/>Sentimiento: ${p.value[1]}<br/>Promedio: ${Number(p.value[2]).toFixed(1)}%` },
+      xAxis: {
+        type: 'category',
+        data: horas.map((h) => `${h}:00`),
+        name: 'hora',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: sentimientos,
+        name: 'sentimiento',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#12263f' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      visualMap: {
+        min: 0,
+        max: maxPct,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 10,
+        inRange: { color: ['#f7fbff', '#08306b'] },
+        textStyle: { color: '#5a7392' },
+      },
+      series: [{
+        name: 'pct',
+        type: 'heatmap',
+        data: datosGraficosAdicionales.sent_hora_heat.map((d) => [hIdx.get(String(d.hora)), sIdx.get(d.sentimiento), Number(d.pct)]),
+        label: { show: false },
+      }],
+    };
+  }, [datosGraficosAdicionales.sent_hora_heat, periodoGraficos]);
+
+  // ---- g_correlacion: correlacion entre sentimientos ----
+  const opcionCorrelacion = useMemo(() => {
+    if (!datosGraficosAdicionales.correlacion.length) return null;
+    const sentimientos = [...new Set([...datosGraficosAdicionales.correlacion.map((d) => d.a), ...datosGraficosAdicionales.correlacion.map((d) => d.b)])];
+    const sIdx = new Map(sentimientos.map((s, i) => [s, i]));
+    return {
+      ...opcionBase('Correlacion entre sentimientos por mensaje', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `${p.value[1]} vs ${p.value[0]}: r = ${Number(p.value[2]).toFixed(2)}` },
+      xAxis: {
+        type: 'category',
+        data: sentimientos,
+        axisLabel: { color: '#5a7392', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: sentimientos,
+        axisLabel: { color: '#12263f', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      visualMap: {
+        min: -1,
+        max: 1,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 10,
+        inRange: { color: ['#3A86FF', 'white', '#E76F51'] },
+        textStyle: { color: '#5a7392' },
+      },
+      series: [{
+        name: 'r',
+        type: 'heatmap',
+        data: datosGraficosAdicionales.correlacion.map((d) => [sIdx.get(d.a), sIdx.get(d.b), Number(d.r)]),
+        label: {
+          show: true,
+          formatter: ({ value }) => {
+            const v = Number(value);
+            return Number.isFinite(v) ? v.toFixed(2) : '—';
+          },
+          color: '#12263f',
+          fontSize: 9,
+        },
+      }],
+    };
+  }, [datosGraficosAdicionales.correlacion, periodoGraficos]);
+
+  // ---- g_palabras: palabras mas usadas ----
+  const opcionPalabras = useMemo(() => {
+    if (!datosGraficosAdicionales.palabras.length) return null;
+    const filas = [...datosGraficosAdicionales.palabras].sort((a, b) => Number(b.n) - Number(a.n));
+    return {
+      ...opcionBase('Palabras mas usadas', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value} veces` },
+      xAxis: {
+        type: 'value',
+        name: 'veces',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: filas.map((f) => f.palabra),
+        inverse: true,
+        axisLabel: { color: '#12263f' },
+        axisTick: { show: false },
+      },
+      series: [{
+        name: 'n',
+        type: 'bar',
+        data: filas.map((f) => Number(f.n)),
+        barMaxWidth: 22,
+        itemStyle: { color: '#8338EC', borderRadius: [0, 4, 4, 0] },
+        label: { show: true, position: 'right', formatter: ({ value }) => value, color: '#12263f', fontWeight: 600 },
+      }],
+    };
+  }, [datosGraficosAdicionales.palabras, periodoGraficos]);
+
+  // ---- g_emojis: emojis mas usados ----
+  const opcionEmojis = useMemo(() => {
+    if (!datosGraficosAdicionales.emojis.length) return null;
+    const filas = [...datosGraficosAdicionales.emojis].sort((a, b) => Number(b.n) - Number(a.n));
+    const colorPorSent = { positivo: '#2A9D8F', neutral: '#E9C46A', negativo: '#E76F51', 'sin dato': '#9aa5b1' };
+    return {
+      ...opcionBase('Emojis mas usados y su sentimiento', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value} veces · ${p.marker ? '' : ''}` },
+      xAxis: {
+        type: 'value',
+        name: 'veces',
+        nameTextStyle: estiloEje,
+        axisLabel: { color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: filas.map((f) => f.etiqueta || f.emoji),
+        inverse: true,
+        axisLabel: { color: '#12263f' },
+        axisTick: { show: false },
+      },
+      series: [{
+        name: 'n',
+        type: 'bar',
+        data: filas.map((f) => ({ value: Number(f.n), itemStyle: { color: colorPorSent[f.sentimiento] } })),
+        barMaxWidth: 22,
+        label: { show: true, position: 'right', formatter: ({ value }) => value, color: '#12263f', fontWeight: 600 },
+      }],
+    };
+  }, [datosGraficosAdicionales.emojis, periodoGraficos]);
+
+  // ---- g_libreria_vs_propios: polaridad propio vs libreria ----
+  const opcionLibreriaVsPropios = useMemo(() => {
+    if (!datosGraficosAdicionales.libreria_vs_propios.length) return null;
+    const filas = datosGraficosAdicionales.libreria_vs_propios;
+    const polaridades = ['positivo', 'neutral', 'negativo'];
+    const fuentes = ['diccionario propio', 'libreria (syuzhet)'];
+    const indice = new Map(filas.map((f, i) => [`${f.polaridad}||${f.fuente}`, i]));
+    const colorPorFuente = { 'diccionario propio': '#2E75B6', 'libreria (syuzhet)': '#E76F51' };
+    return {
+      ...opcionBase('Polaridad: diccionario propio vs libreria', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { bottom: 0, data: fuentes, textStyle: { color: '#5a7392' } },
+      xAxis: {
+        type: 'category',
+        data: polaridades,
+        axisLabel: { color: '#5a7392' },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: '% de mensajes',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v}%`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      series: fuentes.map((fuente, i) => ({
+        name: fuente,
+        type: 'bar',
+        data: polaridades.map((p) => {
+          const idx = indice.get(`${p}||${fuente}`);
+          return idx != null ? Number(filas[idx].pct) : 0;
+        }),
+        barMaxWidth: 22,
+        barGap: '10%',
+        itemStyle: { color: colorPorFuente[fuente], borderRadius: [0, 4, 4, 0] },
+        label: { show: true, position: 'top', formatter: ({ value }) => value.toFixed(1) + '%', color: '#12263f', fontSize: 9 },
+      })),
+    };
+  }, [datosGraficosAdicionales.libreria_vs_propios, periodoGraficos]);
+
+  // ---- g_diferencia: diferencia entre dos periodos ----
+  const opcionDiferencia = useMemo(() => {
+    if (!datosGraficosAdicionales.diferencia.length) return null;
+    const filas = [...datosGraficosAdicionales.diferencia].sort((a, b) => Number(b.dif) - Number(a.dif));
+    return {
+      ...opcionBase('Diferencia entre dos periodos', periodoGraficos?.nombre ? `Periodo: ${periodoGraficos.nombre}` : undefined),
+      tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value > 0 ? '+' : ''}${p.value.toFixed(1)} puntos` },
+      xAxis: {
+        type: 'value',
+        name: 'diferencia (puntos porcentuales)',
+        nameTextStyle: estiloEje,
+        axisLabel: { formatter: (v) => `${v > 0 ? '+' : ''}${v}`, color: '#5a7392' },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: filas.map((f) => f.sentimiento),
+        inverse: true,
+        axisLabel: { color: '#12263f' },
+        axisTick: { show: false },
+      },
+      series: [{
+        name: 'diferencia',
+        type: 'bar',
+        data: filas.map((f) => ({ value: Number(f.dif), itemStyle: { color: f.sube ? '#2A9D8F' : '#E76F51' } })),
+        barMaxWidth: 22,
+        label: { show: true, position: 'right', formatter: ({ value }) => (value > 0 ? '+' : '') + value.toFixed(1), color: '#12263f', fontWeight: 600 },
+      }],
+    };
+  }, [datosGraficosAdicionales.diferencia, periodoGraficos]);
+
   const hayDatos = datos.length > 0;
 
   return (
@@ -1108,6 +1572,163 @@ export default function Dashboard() {
             )}
             {!cargandoGraficos && !errorGraficos && !opcionCalor && datosGraficos.calor.length === 0 && (
               <p className="placeholder">Sin datos de calor para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Volumen de mensajes en el tiempo">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Volumen de mensajes en el tiempo</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionVolumen && (
+              <EChart option={opcionVolumen} height={320} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionVolumen && datosGraficosAdicionales.volumen.length === 0 && (
+              <p className="placeholder">Sin datos de volumen para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Evolucion de sentimientos por ano">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Evolucion de los sentimientos por ano</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionEvolucionAnual && (
+              <EChart option={opcionEvolucionAnual} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionEvolucionAnual && datosGraficosAdicionales.evolucion_anual.length === 0 && (
+              <p className="placeholder">Se necesitan al menos dos anos para la evolucion anual.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Mapa de calor emocional por tiempo">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Mapa de calor emocional por tiempo</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionSentHeat && (
+              <EChart option={opcionSentHeat} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionSentHeat && datosGraficosAdicionales.sent_heat.length === 0 && (
+              <p className="placeholder">Sin datos de calor emocional para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Emocion dominante por fecha">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Emocion dominante por fecha</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionDominante && (
+              <EChart option={opcionDominante} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionDominante && datosGraficosAdicionales.dominante.length === 0 && (
+              <p className="placeholder">Sin datos de emocion dominante para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Polaridad de mensajes por fecha">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Polaridad de los mensajes por fecha</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionPolaridadTiempo && (
+              <EChart option={opcionPolaridadTiempo} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionPolaridadTiempo && datosGraficosAdicionales.polaridad_tiempo.length === 0 && (
+              <p className="placeholder">Sin datos de polaridad para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Sentimiento por hora del dia">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Sentimiento promedio por hora del dia</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionSentHoraHeat && (
+              <EChart option={opcionSentHoraHeat} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionSentHoraHeat && datosGraficosAdicionales.sent_hora_heat.length === 0 && (
+              <p className="placeholder">Sin datos de sentimiento por hora para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Correlacion entre sentimientos">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Correlacion entre sentimientos</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionCorrelacion && (
+              <EChart option={opcionCorrelacion} height={420} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionCorrelacion && datosGraficosAdicionales.correlacion.length === 0 && (
+              <p className="placeholder">Sin datos de correlacion para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Palabras mas usadas">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Palabras mas usadas</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionPalabras && (
+              <EChart option={opcionPalabras} height={480} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionPalabras && datosGraficosAdicionales.palabras.length === 0 && (
+              <p className="placeholder">Sin datos de palabras para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Emojis mas usados">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Emojis mas usados y su sentimiento</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionEmojis && (
+              <EChart option={opcionEmojis} height={480} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionEmojis && datosGraficosAdicionales.emojis.length === 0 && (
+              <p className="placeholder">Sin datos de emojis para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Polaridad propio vs libreria">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Polaridad: diccionario propio vs libreria</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionLibreriaVsPropios && (
+              <EChart option={opcionLibreriaVsPropios} height={360} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionLibreriaVsPropios && datosGraficosAdicionales.libreria_vs_propios.length === 0 && (
+              <p className="placeholder">Sin datos de libreria vs propios para este periodo.</p>
+            )}
+          </section>
+        )}
+
+        {!cargando && !error && hayDatos && (
+          <section className="panel-grafico" aria-label="Diferencia entre dos periodos">
+            <div className="panel-grafico-cabecera">
+              <h2 className="panel-grafico-titulo">Diferencia entre dos periodos</h2>
+            </div>
+            {!cargandoGraficos && !errorGraficos && opcionDiferencia && (
+              <EChart option={opcionDiferencia} height={420} />
+            )}
+            {!cargandoGraficos && !errorGraficos && !opcionDiferencia && datosGraficosAdicionales.diferencia.length === 0 && (
+              <p className="placeholder">
+                Ejecuta <code>enviar_comparacion_api(cmp)</code> desde R para
+                ver la diferencia entre dos periodos.
+              </p>
             )}
           </section>
         )}
