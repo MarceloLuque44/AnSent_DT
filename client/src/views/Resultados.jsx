@@ -246,6 +246,9 @@ export default function Resultados() {
     };
   }, [detalleComp]);
 
+  // `niveles` se agrega a nivel de periodo (una fila por sentimiento/periodo),
+  // por lo que NO se filtra por fecha_desde/fecha_hasta; solo `serie` y
+  // `comparaciones` aplican esos filtros.
   const nivelesFiltrados = datosNiveles;
 
   const serieFiltrada = useMemo(
@@ -269,8 +272,6 @@ export default function Resultados() {
       setCargando(false);
     }
   }, [cargarPeriodos, cargarComparaciones]);
-
-  const hayDatos = datosNiveles.length > 0 || datosSerie.length > 0 || comparaciones.length > 0;
 
   return (
     <div>

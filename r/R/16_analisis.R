@@ -459,6 +459,81 @@ enviar_comparacion_api_equiv <- function(cmp, responsable = Sys.getenv("RESPONSA
 }
 
 # ------------------------------------------------------------------------------
+# Helpers de envío de los outputs de preprocesar() a la API/BD (Postgres).
+# Se usan desde preprocesar() (00_main.R) tras anotar(), envuelto en tryCatch
+# para que nunca bloquee los archivos locales ni el retorno.
+# ------------------------------------------------------------------------------
+
+# POST de la cabecera de ejecucion de preprocesar(): devuelve id_ejecucion.
+enviar_ejecucion_api <- function(meta) {
+  if (is.null(meta) || !is.list(meta)) {
+    message("Ejecucion: sin metadatos para enviar a la API.")
+    return(invisible(NULL))
+  }
+  body <- list(
+    fecha = meta$fecha %||% format(Sys.time(), "%Y-%m-%d"),
+    hora_inicio = meta$hora_inicio %||% format(Sys.time(), "%H:%M:%S"),
+    hora_fin = meta$hora_fin %||% format(Sys.time(), "%H:%M:%S"),
+    duracion_seg = meta$duracion_seg,
+    responsable = meta$responsable %||% Sys.getenv("RESPONSABLE", ""),
+    archivo = meta$archivo %||% "",
+    archivo_md5 = meta$archivo_md5 %||% "",
+    registros_leidos = meta$registros_leidos,
+    mensajes_limpios = meta$mensajes_limpios,
+    mensajes_excluidos = meta$mensajes_excluidos,
+    rango_fechas_inicio = meta$rango_fechas_inicio,
+    rango_fechas_fin = meta$rango_fechas_fin,
+    polaridad = meta$polaridad,
+    estado = meta$estado %||% "ok",
+    paso_donde_paro = meta$paso_donde_paro %||% "",
+    mensaje_error = meta$mensaje_error %||% "",
+    pasos_registrados = meta$pasos_registrados)
+  resp <- tryCatch(.api_post("/api/preprocesar/ejecuciones", body), error = function(e) NULL)
+  if (is.null(resp)) return(invisible(NULL))
+  invisible(resp$id_ejecucion %||% NULL)
+}
+
+# POST de un output de preprocesar() (DELETE WHERE id_ejecucion + INSERT masivo).
+# `datos` puede ser un data.frame o una lista (para el resumen, una fila).
+enviar_output_api <- function(endpoint, id_ejecucion, datos) {
+  if (is.null(id_ejecucion) || is.na(id_ejecucion)) {
+    message(sprintf("%s: sin id_ejecucion; no se envia a la API.", endpoint))
+    return(invisible(NULL))
+  }
+  if (is.data.frame(datos)) {
+    if (!nrow(datos)) {
+      message(sprintf("%s: sin filas para enviar a la API.", endpoint))
+      return(invisible(NULL))
+    }
+    filas <- lapply(seq_len(nrow(datos)), function(i) as.list(datos[i, , drop = FALSE]))
+  } else if (is.list(datos)) {
+    filas <- list(datos)
+  } else {
+    message(sprintf("%s: datos no validos para enviar a la API.", endpoint))
+    return(invisible(NULL))
+  }
+  filas <- lapply(filas, function(f) {
+    lapply(f, function(v) {
+      if (length(v) == 0 || all(is.na(v))) return(NULL)
+      v <- if (is.atomic(v) && length(v) == 1) v[[1]] else v
+      if (inherits(v, c("Date", "POSIXct", "POSIXlt", "POSIXt"))) return(format(v))
+      if (is.factor(v)) return(as.character(v))
+      if (is.list(v) && !is.data.frame(v)) return(jsonlite::toJSON(v, auto_unbox = TRUE))
+      if (is.data.frame(v)) return(jsonlite::toJSON(v, auto_unbox = TRUE))
+      v
+    })
+  })
+  body <- list(id_ejecucion = id_ejecucion, datos = filas)
+  tryCatch(
+    .api_post(sprintf("/api/preprocesar/%s", endpoint), body),
+    error = function(e) {
+      message(sprintf("%s: no se pudieron enviar los datos a la API: %s", endpoint, conditionMessage(e)))
+      invisible(NULL)
+    }
+  )
+}
+
+# ------------------------------------------------------------------------------
 # guardar_analisis: guarda las tablas (CSV) y los graficos (PNG) de un analisis
 # en salida/analisis/<nombre_periodo>/ para que el dashboard los pueda leer.
 #
