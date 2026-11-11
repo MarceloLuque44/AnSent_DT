@@ -236,7 +236,7 @@ export default function Dashboard() {
   const [cargandoAnalisis, setCargandoAnalisis] = useState(false);
   const [errorAnalisis, setErrorAnalisis] = useState(null);
   const [guardando, setGuardando] = useState(null);
-  const [analisisAbierto, setAnalisisAbierto] = useState(true);
+  const [panelAnalisisAbierto, setPanelAnalisisAbierto] = useState(false);
 
   const [comparaciones, setComparaciones] = useState([]);
   const [comparacionActiva, setComparacionActiva] = useState('');
@@ -1776,24 +1776,42 @@ export default function Dashboard() {
         )}
       </header>
 
-      <PanelAnalisis
-        titulo="Analisis guardados"
-        abierto={analisisAbierto}
-        alternar={() => setAnalisisAbierto((prev) => !prev)}
-      >
-        <div style={{ marginBottom: '0.75rem', fontSize: '0.82rem', color: '#5a7392' }}>
-          Haga doble clic sobre cualquier valor para editarlo. Se guarda automáticamente al salir de la celda.
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setPanelAnalisisAbierto((prev) => !prev)}
+        >
+          Editar los análisis
+        </button>
+      </div>
+
+      {panelAnalisisAbierto && (
+        <div className="panel-flotante" role="dialog" aria-modal="true" aria-label="Editar análisis">
+          <div className="panel-flotante-cabecera">
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#12263f' }}>Editar análisis</h2>
+            <button
+              type="button"
+              className="btn btn-pequeno"
+              onClick={() => setPanelAnalisisAbierto(false)}
+            >
+              Cerrar
+            </button>
+          </div>
+          <div style={{ margin: '0.75rem', fontSize: '0.82rem', color: '#5a7392' }}>
+            Haga doble clic sobre cualquier valor para editarlo. Se guarda automáticamente al salir de la celda.
+          </div>
+          <AnalisisList
+            analisis={analisis}
+            cargando={cargandoAnalisis}
+            error={errorAnalisis}
+            guardando={guardando}
+            onGuardar={guardarAnalisis}
+            onRefrescar={refrescarAnalisis}
+            onEliminar={eliminarAnalisis}
+          />
         </div>
-        <AnalisisList
-          analisis={analisis}
-          cargando={cargandoAnalisis}
-          error={errorAnalisis}
-          guardando={guardando}
-          onGuardar={guardarAnalisis}
-          onRefrescar={refrescarAnalisis}
-          onEliminar={eliminarAnalisis}
-        />
-      </PanelAnalisis>
+      )}
 
       {error && <div className="estado-error">No se pudo cargar el dashboard: {error}</div>}
 
