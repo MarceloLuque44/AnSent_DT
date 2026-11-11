@@ -124,61 +124,12 @@ leer_csv_generico <- function(ruta) {
 }
 
 
-# ------------------------------------------------------------------------------
-# B. DICCIONARIOS EXTERNAS (API con fallback a carpeta config/): nada fijo dentro del código
-# ------------------------------------------------------------------------------
-
-# ---- Helpers de API para diccionarios (patrón Peticiones.R: httr2 + x-api-key) ----
-
-api_url <- function() {
-  u <- Sys.getenv("ANSENT_API_URL", "")
-  if (!nzchar(u)) "" else sub("/+$", "", u)
-}
-
-api_key <- function() {
-  k <- Sys.getenv("ANSENT_API_KEY", "")
-  if (!nzchar(k)) "" else k
-}
-
-api_perform <- function(req) {
-  if (!requireNamespace("httr2", quietly = TRUE)) return(NULL)
-  req <- httr2::req_error(req, is_error = function(resp) FALSE)
-  resp <- tryCatch(
-    httr2::req_perform(req),
-    error = function(e) NULL
-  )
-  if (is.null(resp)) return(NULL)
-  if (httr2::resp_status(resp) >= 400) return(NULL)
-  resp
-}
-
-# GET /api/diccionarios/:tipo  ->  lista $datos (filas) y $texto (cuerpo crudo, para hash).
-# Devuelve NULL si la API no responde o falla (fallback transparente a archivo local).
-fetch_diccionario <- function(tipo, timeout = 10) {
-  if (!requireNamespace("httr2", quietly = TRUE)) return(NULL)
-  u <- api_url()
-  k <- api_key()
-  if (!nzchar(u) || !nzchar(k)) return(NULL)
-  req <- httr2::request(paste0(u, "/api/diccionarios/", tipo)) |>
-    httr2::req_headers(`x-api-key` = k) |>
-    httr2::req_timeout(timeout)
-  resp <- api_perform(req)
-  if (is.null(resp)) return(NULL)
-  txt <- httr2::resp_body_string(resp)
-  datos <- jsonlite::fromJSON(txt, simplifyVector = TRUE)
-  list(datos = datos$data, texto = txt)
-}
-
 cargar_config <- function(dir_config, sentimientos_activos = NULL) {
   ruta <- function(f) file.path(dir_config, f)
 
   # Lee un diccionario: API si responde, archivo local si no.
   # Devuelve lista $datos (data.frame/lista), $origen ("api"/"local"), $texto (cuerpo API o NULL).
   leer_diccionario <- function(tipo_api, archivo, es_json = FALSE) {
-    api <- tryCatch(fetch_diccionario(tipo_api), error = function(e) NULL)
-    if (!is.null(api) && !is.null(api$datos) && NROW(api$datos) > 0) {
-      return(list(datos = api$datos, origen = "api", texto = api$texto))
-    }
     if (!file.exists(ruta(archivo))) {
       stop("Falta el archivo '", archivo, "' en '", dir_config, "'",
            "\n  (carpeta de trabajo actual: ", getwd(), ")")

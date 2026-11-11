@@ -1,30 +1,20 @@
 source("cargar_proyecto.R")              # carga todas las herramientas (una vez)
-res <- preprocesar("data/result.json", dir_salida = "salida")  # sin filtro de fecha: todos los datos
-datos <- cargar_datos_analisis("salida") # carga mensajes_limpios.csv y tokens.csv
-migrar_bitacora()
+
+# --- Paso 1: Preprocesamiento (solo local, sin API) ---
+res <- preprocesar("data/result.json", dir_salida = "salida")
 datos <- cargar_datos_analisis("salida")
 
-a <- analizar_periodo(datos, "2022-01-02", "2026-03-31")   
-# cmp <- comparar_periodos(datos, "todo_2023", "todo_2024") 
-cmp <- comparar_periodos(datos, "2023-01-01", "2024-03-31","2024-01-01", "2025-03-31")
+# --- Paso 2: Analisis por periodo ---
+a <- analizar_periodo(datos, "2022-01-02", "2026-03-31")
+cmp <- comparar_periodos(datos, "2023-01-01", "2024-03-31", "2024-01-01", "2025-03-31")
 
-source("Peticiones.R")              # carga todas las herramientas (una vez)
-# enviar_niveles_api(a)
-# enviar_graficos_api(a)
-# enviar_graficos_adicionales_api(a)
-#a$nivel; a$tfidf; a$topicos$terminos; a$shallow$upos; a$libreria
-#p <- graficos_periodo(a);  
-#p$barras;  p$tiempo;  p$polar
+# --- Paso 3: Guardar analisis localmente (CSV/PNG, sin API) ---
+guardar_analisis(a, dir = "salida/analisis", enviar_api = FALSE)
+guardar_analisis(cmp, dir = "salida/analisis", enviar_api = FALSE)
 
+# --- Paso 4: Enviar todo a la API (una sola llamada centralizada) ---
+source("Peticiones.R")
+enviar_flujo_completo_api(a = a, cmp = cmp, responsable = Sys.getenv("RESPONSABLE", "R local"))
 
-
-#cmp$interpretacion;  graficos_comparacion(cmp)$arana
-
-#guardar_analisis(a)   # deja CSV/PNG en salida/analisis/<periodo>/ (para el dashboard)
-
-
-
-  # source("cargar_proyecto.R")
-  # source("Migraciones.R")
-  # migrar_diccionarios(dir_config = "config")
-
+# --- Paso 5 (opcional): prueba de conexión ---
+# probar_conexion_api()

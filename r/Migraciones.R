@@ -15,9 +15,6 @@
 #   migrar_diccionarios(dir_config = "config")
 # ==============================================================================
 
-if (!requireNamespace("httr2", quietly = TRUE)) {
-  install.packages('httr2')
-}
 if (!requireNamespace("readr", quietly = TRUE)) {
   install.packages('readr')
 }
@@ -25,105 +22,10 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   install.packages('jsonlite')
 }
 
-api_url <- function() {
-  u <- Sys.getenv("ANSENT_API_URL", "")
-  if (!nzchar(u)) stop("Define ANSENT_API_URL (p.ej. http://localhost:3000)", call. = FALSE)
-  sub("/+$", "", u)
-}
+# Funciones de conexión a la API: se proveen desde r/Peticiones.R
+source("Peticiones.R")
 
-api_key <- function() {
-  k <- Sys.getenv("ANSENT_API_KEY", "")
-  if (!nzchar(k)) stop("Define ANSENT_API_KEY", call. = FALSE)
-  k
-}
 
-api_perform <- function(req) {
-  req <- httr2::req_error(req, is_error = function(resp) FALSE)
-  resp <- tryCatch(
-    httr2::req_perform(req),
-    error = function(e) {
-      stop("No se pudo conectar con la API: ", conditionMessage(e), call. = FALSE)
-    }
-  )
-  if (httr2::resp_status(resp) >= 400) {
-    stop("API ", httr2::resp_status(resp), ": ",
-         httr2::resp_body_string(resp), call. = FALSE)
-  }
-  resp
-}
-
-# POST /api/diccionarios/:tipo  (requiere x-api-key)
-post_diccionario <- function(tipo, fila, timeout = 30) {
-  req <- httr2::request(paste0(api_url(), "/api/diccionarios/", tipo)) |>
-    httr2::req_headers(`x-api-key` = api_key()) |>
-    httr2::req_body_json(fila, auto_unbox = TRUE) |>
-    httr2::req_method("POST") |>
-    httr2::req_timeout(timeout)
-  resp <- api_perform(req)
-  httr2::resp_body_json(resp, simplifyVector = TRUE)
-}
-
-# Normaliza un valor escalar: NA/NULL/length 0 -> NULL para JSON
-limpia <- function(x) {
-  if (is.null(x) || length(x) == 0) return(NULL)
-  x <- x[1]
-  if (is.na(x)) return(NULL)
-  as.character(x)
-}
-
-# Convierte columnas numericas; deja texto como esta
-as_num <- function(x) suppressWarnings(as.numeric(x))
-
-# Numero escalar o NULL (evita enviar numeric(0), que jsonlite serializa como [])
-num_o_null <- function(x) {
-  if (is.null(x) || length(x) == 0) return(NULL)
-  x <- suppressWarnings(as.numeric(x[1]))
-  if (is.na(x)) return(NULL)
-  x
-}
-
-# Logico escalar tolerante a true/false, 1/0, "si"/"no"; NA -> default
-logico_o_null <- function(x, default = TRUE) {
-  if (is.null(x) || length(x) == 0) return(default)
-  x <- x[1]
-  if (is.na(x)) return(default)
-  if (is.logical(x)) return(x)
-  v <- tolower(trimws(as.character(x)))
-  if (v %in% c("true", "t", "1", "si", "sí", "yes", "y")) return(TRUE)
-  if (v %in% c("false", "f", "0", "no", "n")) return(FALSE)
-  default
-}
-
-# Fuerza un vector a array JSON incluso con un solo elemento.
-# Sin I(), jsonlite + auto_unbox = TRUE convierte c("x") en "x" (escalar)
-# y Postgres rechaza el jsonb con "invalid input syntax for type json".
-como_array <- function(x) {
-  if (is.null(x) || length(x) == 0) return(NULL)
-  x <- as.character(unlist(x, use.names = FALSE))
-  x <- x[!is.na(x)]
-  if (!length(x)) return(NULL)
-  I(x)
-}
-
-# GET /api/diccionarios/:tipo -> lista de filas existentes
-get_diccionario <- function(tipo, limit = 500, timeout = 30) {
-  req <- httr2::request(paste0(api_url(), "/api/diccionarios/", tipo)) |>
-    httr2::req_url_query(limit = limit) |>
-    httr2::req_timeout(timeout)
-  resp <- api_perform(req)
-  httr2::resp_body_json(resp, simplifyVector = FALSE)$data
-}
-
-# PUT /api/diccionarios/:tipo/:id  (requiere x-api-key)
-put_diccionario <- function(tipo, id, fila, timeout = 30) {
-  req <- httr2::request(paste0(api_url(), "/api/diccionarios/", tipo, "/", id)) |>
-    httr2::req_headers(`x-api-key` = api_key()) |>
-    httr2::req_body_json(fila, auto_unbox = TRUE) |>
-    httr2::req_method("PUT") |>
-    httr2::req_timeout(timeout)
-  resp <- api_perform(req)
-  httr2::resp_body_json(resp, simplifyVector = TRUE)
-}
 
 migra_sentimientos <- function(dir_config) {
   cat("[Migraciones] sentimientos ...\n")
