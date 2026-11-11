@@ -4,8 +4,8 @@
 # ==============================================================================
 
 # Configura antes de ejecutar:
-Sys.setenv(RESPONSABLE = "GRUPO13")
-Sys.setenv(ANSENT_API_URL = "http://localhost:3000")
+Sys.setenv(RESPONSABLE = "lunes")
+Sys.setenv(ANSENT_API_URL = "https://ansent-dt.onrender.com/")
 Sys.setenv(ANSENT_API_KEY = "784b578e8cd3fcf26996d65403775af39b42c37f423acdfe1397278549a28c81")
 #
 # O mejor en ~/.Renviron:
@@ -261,7 +261,6 @@ enviar_graficos_api <- function(a, responsable = Sys.getenv("RESPONSABLE", "R lo
     invisible(NULL)
   })
 }
-
 # ==============================================================================
 # enviar_graficos_adicionales_api(): manda los graficos #15-24 al backend
 # POST /api/dashboard/graficos (un solo POST, cada grafico opcional).

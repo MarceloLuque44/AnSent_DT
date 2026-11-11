@@ -9,6 +9,7 @@ node_modules
 .zencoder
 
 # Variables de entorno y builds
-.env
+
 .env.local
 client/dist
+.env
