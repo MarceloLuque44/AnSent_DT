@@ -61,12 +61,8 @@ control_calidad <- function(ctx, d) {
     ejemplo_col = "outlier_longitud",
     # CÓDIGO
     codigo = {
-      # Un n_caracteres vacio (NA) haria fallar quantile() con
-      # "missing values and NaN's not allowed if 'na.rm' is FALSE".
       lg <- log1p(datos$n_caracteres)
-      lg[!is.finite(lg)] <- 0
-      q <- stats::quantile(lg, c(0.25, 0.75), names = FALSE, na.rm = TRUE)
-      q[!is.finite(q)] <- 0
+      q <- stats::quantile(lg, c(0.25, 0.75), names = FALSE)
       lim <- q[2] + 1.5 * (q[2] - q[1])
       datos$outlier_longitud <- lg > lim
       ctx$nota <- sprintf("Umbral calculado: %d caracteres.", round(expm1(lim)))

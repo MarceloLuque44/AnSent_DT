@@ -745,7 +745,6 @@ registrar_ejecucion <- function(dir_bitacoras, fila, ctx, estado = "ok", mensaje
   hojas$Ejecuciones <- .unir(ej, df)
   hojas$Cambios <- .estado_cambios(cam)
   .guardar_completa(dir_bitacoras, hojas)
-
   invisible(id_e)
 }
 
@@ -778,8 +777,5 @@ registrar_experimento <- function(metodo, parametros = "", n_documentos = "", ta
     archivo_resultado = archivo_resultado, notas = notas, responsable = responsable, stringsAsFactors = FALSE)
   hojas$Experimentos <- .unir(ex, fila)
   .guardar_completa(dir_bitacoras, hojas)
-
   invisible(fila)
 }
-
-

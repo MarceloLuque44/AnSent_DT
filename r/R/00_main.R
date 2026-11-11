@@ -15,14 +15,14 @@
 #         y la carpeta `dir_bitacoras` (por defecto bitacoras/) con SOLO DOS archivos:
 #             bitacora_limpia.xlsx     pasos de la última ejecución exitosa
 #             bitacora_completa.xlsx   cambios (código y diccionarios), ejecuciones, pasos y experimentos
-# Comentario
+#
 # consola: "didactico" explica cada paso mientras trabaja | "resumen" una línea por paso | "silencioso"
 # ==============================================================================
 
 preprocesar <- function(ruta_archivo,
                         fecha_inicio = NULL, fecha_fin = NULL,
                         responsable = Sys.getenv("RESPONSABLE", ""),
-                        dir_config = "config", dir_salida = file.path("client", "src", "views", "salida"),
+                        dir_config = "config", dir_salida = "salida",
                         dir_bitacoras = "bitacoras",
                         sentimientos_activos = NULL,
                         excluir_publicidad = TRUE, umbral_publicidad = 4,
@@ -64,8 +64,6 @@ preprocesar <- function(ruta_archivo,
 
   cuerpo <- function() {
     etapa("Cargando diccionarios (config/)")
-    # dir_config = "config"
-    # sentimientos_activos = NULL
     cfg <- cargar_config(dir_config, sentimientos_activos)
     ctx <- nuevo_ctx(params, cfg)
     ctx$emojis_pendientes <- NULL
@@ -140,7 +138,6 @@ preprocesar <- function(ruta_archivo,
     }
 
     list(estado = "ok", datos = d, excluidos = out$excluidos, tokens = out$tokens,
-         limpio = out$limpio, emojis_en_uso = out$emojis_en_uso,
          bitacora = b, emojis_pendientes = ctx$emojis_pendientes, resumen = resumen)
   }
 
@@ -179,6 +176,5 @@ preprocesar <- function(ruta_archivo,
     stop(conditionMessage(e), call. = FALSE)
   })
   anotar(if (identical(res$estado, "ok")) "ok" else "detenido_emojis_pendientes", "", res)
-
   invisible(res)
 }

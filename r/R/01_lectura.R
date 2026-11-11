@@ -124,33 +124,18 @@ leer_csv_generico <- function(ruta) {
 }
 
 
+# ------------------------------------------------------------------------------
+# B. DICCIONARIOS EXTERNOS (carpeta config/): nada fijo dentro del código
+# ------------------------------------------------------------------------------
 cargar_config <- function(dir_config, sentimientos_activos = NULL) {
   ruta <- function(f) file.path(dir_config, f)
+  req <- c("sentimientos.json", "emojis.csv", "stopwords.csv", "palabras_anuncio.csv", "genero.csv",
+           "abreviaturas.csv", "emoticonos.csv", "codigos_materia.csv")
+  falta <- req[!file.exists(ruta(req))]
+  if (length(falta)) stop("Faltan archivos en '", dir_config, "': ", paste(falta, collapse = ", "),
+                          "\n  (¿estás en la carpeta del proyecto? carpeta actual: ", getwd(), ")")
 
-  # Lee un diccionario: API si responde, archivo local si no.
-  # Devuelve lista $datos (data.frame/lista), $origen ("api"/"local"), $texto (cuerpo API o NULL).
-  leer_diccionario <- function(tipo_api, archivo, es_json = FALSE) {
-    if (!file.exists(ruta(archivo))) {
-      stop("Falta el archivo '", archivo, "' en '", dir_config, "'",
-           "\n  (carpeta de trabajo actual: ", getwd(), ")")
-    }
-    if (es_json) {
-      datos <- jsonlite::fromJSON(ruta(archivo), simplifyVector = TRUE)$sentimientos
-    } else {
-      datos <- readr::read_csv(ruta(archivo), col_types = readr::cols(.default = "c"),
-                               progress = FALSE, na = character())
-    }
-    list(datos = datos, origen = "local", texto = NULL)
-  }
-
-  hash_uno <- function(res, archivo) {
-    if (res$origen == "api" && !is.null(res$texto)) digest::digest(res$texto, algo = "md5")
-    else digest::digest(file = ruta(archivo), algo = "md5")
-  }
-
-  # --- sentimientos (JSON) ---
-  res_sent <- leer_diccionario("sentimientos", "sentimientos.json", es_json = TRUE)
-  sj <- res_sent$datos
+  sj <- jsonlite::fromJSON(ruta("sentimientos.json"), simplifyVector = TRUE)$sentimientos
   if (!is.null(sentimientos_activos)) {
     desconocidos <- setdiff(sentimientos_activos, sj$nombre)
     if (length(desconocidos)) stop("Sentimientos que no existen en el diccionario: ",
@@ -159,9 +144,9 @@ cargar_config <- function(dir_config, sentimientos_activos = NULL) {
   }
   sj <- sj[order(sj$orden), ]
 
-  # --- emojis (CSV) ---
-  res_emo <- leer_diccionario("emojis", "emojis.csv")
-  emo <- res_emo$datos
+  leer <- function(f) readr::read_csv(ruta(f), col_types = readr::cols(.default = "c"),
+                                      progress = FALSE, na = character())
+  emo <- leer("emojis.csv")
   for (cn in c("significado_es", "sentimiento", "polaridad", "nombre_unicode"))
     if (!cn %in% names(emo)) emo[[cn]] <- ""
   emo <- emo[, c("emoji", "significado_es", "sentimiento", "polaridad", "nombre_unicode")]
@@ -178,30 +163,11 @@ cargar_config <- function(dir_config, sentimientos_activos = NULL) {
          paste(utils::head(emo$emoji[malos], 8), collapse = " "),
          "\n  Usa 'neutral' o uno de: ", paste(sj$nombre, collapse = ", "))
 
-  # --- los 6 diccionarios CSV restantes ---
-  res_stop    <- leer_diccionario("stopwords", "stopwords.csv")
-  res_anuncio <- leer_diccionario("palabras_anuncio", "palabras_anuncio.csv")
-  res_genero  <- leer_diccionario("genero", "genero.csv")
-  res_abrev   <- leer_diccionario("abreviaturas", "abreviaturas.csv")
-  res_emoticonos <- leer_diccionario("emoticonos", "emoticonos.csv")
-  res_materias <- leer_diccionario("codigos_materia", "codigos_materia.csv")
-
-  # huella de cada diccionario: hash del cuerpo de la API o del archivo local
-  hashes <- c(
-    sentimientos = hash_uno(res_sent, "sentimientos.json"),
-    emojis = hash_uno(res_emo, "emojis.csv"),
-    stopwords = hash_uno(res_stop, "stopwords.csv"),
-    palabras_anuncio = hash_uno(res_anuncio, "palabras_anuncio.csv"),
-    genero = hash_uno(res_genero, "genero.csv"),
-    abreviaturas = hash_uno(res_abrev, "abreviaturas.csv"),
-    emoticonos = hash_uno(res_emoticonos, "emoticonos.csv"),
-    codigos_materia = hash_uno(res_materias, "codigos_materia.csv")
-  )
-
-  list(sent = sj, emojis = emo, stop = res_stop$datos, anuncio = res_anuncio$datos,
-       genero = res_genero$datos, abrev = res_abrev$datos,
-       emoticonos = res_emoticonos$datos, materias = res_materias$datos,
-       hashes = hashes, dir = dir_config)
+  # huella de cada diccionario: sirve para dejar constancia en bitacora_limpia.xlsx (hoja "Parametros") de qué versión se usó
+  hashes <- vapply(req, function(f) digest::digest(file = ruta(f), algo = "md5"), character(1))
+  list(sent = sj, emojis = emo, stop = leer("stopwords.csv"), anuncio = leer("palabras_anuncio.csv"),
+       genero = leer("genero.csv"), abrev = leer("abreviaturas.csv"),
+       emoticonos = leer("emoticonos.csv"), materias = leer("codigos_materia.csv"), hashes = hashes, dir = dir_config)
 }
 
 
@@ -211,11 +177,7 @@ cargar_config <- function(dir_config, sentimientos_activos = NULL) {
 auditar_entrada <- function(ctx, d) {
   M <- "1. Auditoría y perfilado inicial"
   N <- nrow(d)
-  # optional = TRUE: una fecha no ISO no debe abortar la auditoria; se cuenta
-  # despues en "Fechas no interpretables".
-  fechas_aud <- suppressWarnings(as.Date(substr(d$fecha_raw, 1, 10), optional = TRUE))
-  rf <- suppressWarnings(range(fechas_aud, na.rm = TRUE))
-  if (!all(is.finite(rf))) rf <- c(as.Date(NA), as.Date(NA))
+  rf <- range(as.Date(substr(d$fecha_raw, 1, 10)), na.rm = TRUE)
 
   # ▌BITÁCORA OFICIAL
   registrar_hallazgo(ctx, metodologia = M, campo = "(todo el dataset)", atributo = "estructura",
