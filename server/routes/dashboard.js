@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { config } from '../config.js';
 import * as rService from '../services/rService.js';
 import * as sseHub from '../services/sseHub.js';
+import { query } from '../db/pg.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -155,6 +156,35 @@ router.get('/graficos', async (_req, res) => {
     return res.status(503).json({ error: 'R/Plumber no disponible' });
   }
   res.json(graficos);
+});
+
+/** Datos de analisis_grafico_dominante con filtros de fecha opcionales */
+router.get('/dominante', async (req, res) => {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    let sql = 'SELECT fecha, dom, freq FROM public.analisis_grafico_dominante';
+    const params = [];
+    const condiciones = [];
+
+    if (fecha_inicio) {
+      condiciones.push(`fecha >= $${params.push(fecha_inicio)}`);
+    }
+    if (fecha_fin) {
+      condiciones.push(`fecha <= $${params.push(fecha_fin)}`);
+    }
+
+    if (condiciones.length > 0) {
+      sql += ' WHERE ' + condiciones.join(' AND ');
+    }
+
+    sql += ' ORDER BY fecha ASC, dom ASC';
+
+    const { rows } = await query(sql, params);
+    res.json({ datos: rows });
+  } catch (err) {
+    console.error('[Dashboard] Error obteniendo datos de dominante:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

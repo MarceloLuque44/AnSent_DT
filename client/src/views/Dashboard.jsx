@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiGet } from '../api.js';
+import { apiGet, apiPut, apiDelete } from '../api.js';
 import EChart from '../components/EChart.jsx';
 
 const AZUL_BARRAS = '#2E75B6';
@@ -60,6 +60,319 @@ const opcionBase = (titulo, subtext) => ({
  *  - Comparación A vs B:    GET /api/dashboard/comparaciones/:id
  * Todos los gráficos se dibujan con ECharts.
  */
+/** Panel desplegable (accordion), patrón igual al de Bitacoras.jsx. */
+function PanelAnalisis({ titulo, abierto, alternar, children }) {
+  return (
+    <section className="analisis-panel" aria-label="analisis">
+      <div
+        className="analisis-cabecera"
+        onClick={alternar}
+        onKeyDown={(e) => e.key === 'Enter' && alternar()}
+        role="button"
+        tabIndex={0}
+        aria-expanded={abierto}
+        aria-controls="analisis-grid"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+          <h2 className="panel-titulo">{titulo}</h2>
+        </div>
+        <span className="panel-indicador">{abierto ? '▼' : '▶'}</span>
+      </div>
+      {abierto && children}
+    </section>
+  );
+}
+
+/** Valor de un campo renderizado siempre como input (tamaño reducido). */
+function CampoInput({ campo, valor, leerSolo, nombre }) {
+  const type = campo === 'n_mensajes' ? 'number' : campo === 'fecha_inicio' || campo === 'fecha_fin' ? 'date' : 'text';
+  return (
+    <div className="analisis-campo" key={campo}>
+      <span className="analisis-label">{nombre}</span>
+      <input
+        type={type}
+        name={campo}
+        defaultValue={valor == null ? '' : String(valor)}
+        readOnly={leerSolo}
+        className="input input-pequeno"
+        key={String(valor)}
+      />
+    </div>
+  );
+}
+
+/**
+ * AnalisisList: matriz de cards con los análisis guardados en public.analisis.
+ * Cada card es un formulario con inputs para los campos editables y un botón
+ * de guardado que envía los cambios de esa card mediante PUT.
+ */
+function AnalisisList({ analisis, cargando, error, guardando, onGuardar, onRefrescar, onEliminar }) {
+  if (cargando) return <p className="placeholder">Cargando análisis…</p>;
+  if (error) return <div className="estado-error">{error}</div>;
+
+  const CAMPOS = [
+    { clave: 'id_analisis', etiqueta: 'ID', leerSolo: true },
+    { clave: 'nombre', etiqueta: 'Nombre' },
+    { clave: 'fecha_inicio', etiqueta: 'Inicio' },
+    { clave: 'fecha_fin', etiqueta: 'Fin' },
+    { clave: 'n_mensajes', etiqueta: 'Mensajes' },
+    { clave: 'responsable', etiqueta: 'Responsable' },
+    { clave: 'creado_en', etiqueta: 'Creado', leerSolo: true },
+  ];
+
+  if (analisis.length === 0) {
+    return (
+      <div className="analisis-vacio">
+        <p className="placeholder">No hay análisis guardados todavía.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="analisis-grid">
+      {analisis.map((a) => {
+        const estaGuardando = guardando === a.id_analisis;
+        return (
+          <form
+            key={a.id_analisis}
+            className="analisis-card"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const body = {};
+              let invalido = null;
+
+              for (const { clave, leerSolo, etiqueta } of CAMPOS) {
+                if (leerSolo) continue;
+                let v = formData.get(clave);
+                if (v === null || v === undefined) v = '';
+                v = String(v).trim();
+
+                if (clave === 'nombre') {
+                  if (!v) { invalido = 'El nombre no puede estar vacío'; break; }
+                  body.nombre = v;
+                } else if (clave === 'fecha_inicio' || clave === 'fecha_fin') {
+                  if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                    invalido = `${etiqueta} debe tener formato YYYY-MM-DD`;
+                    break;
+                  }
+                  if (v) body[clave] = v;
+                } else if (clave === 'n_mensajes') {
+                  if (v !== '') {
+                    const n = Number(v);
+                    if (!Number.isInteger(n) || n < 0) {
+                      invalido = 'Mensajes debe ser un entero >= 0';
+                      break;
+                    }
+                    body.n_mensajes = n;
+                  }
+                } else if (clave === 'responsable') {
+                  if (v !== '') body.responsable = v;
+                }
+              }
+
+              if (invalido) {
+                setErrorAnalisis(invalido);
+                return;
+              }
+
+              onGuardar(a.id_analisis, body);
+            }}
+          >
+            <div className="analisis-card-cabecera">
+              <span className="analisis-id">#{a.id_analisis}</span>
+              <span style={{ fontSize: '0.72rem', color: '#5a7392', marginLeft: 'auto' }}>{a.creado_en}</span>
+            </div>
+            {CAMPOS.map((c) => (
+              <CampoInput
+                key={c.clave}
+                campo={c.clave}
+                valor={a[c.clave]}
+                leerSolo={c.leerSolo}
+                nombre={c.etiqueta}
+              />
+            ))}
+            <div className="analisis-acciones">
+              <button
+                type="submit"
+                className="btn btn-pequeno"
+                disabled={estaGuardando}
+              >
+                {estaGuardando ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-pequeno btn-refrescar"
+                onClick={() => onRefrescar(a.id_analisis)}
+                disabled={estaGuardando}
+              >
+                Refrescar
+              </button>
+              <button
+                type="button"
+                className="btn btn-pequeno btn-eliminar"
+                onClick={() => onEliminar(a.id_analisis)}
+                disabled={estaGuardando}
+              >
+                Eliminar
+              </button>
+            </div>
+          </form>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * GraficoDominanteItem: grafico de analisis_grafico_dominante.
+ * Eje x = fecha, eje y = freq, cada sentimiento (dom) es una serie.
+ * Incluye filtros de fecha inicio/fin y boton para agregar otro periodo.
+ */
+function GraficoDominanteItem({
+  id,
+  fechaInicio,
+  fechaFin,
+  datos,
+  cargando,
+  error,
+  onFechaInicioCambio,
+  onFechaFinCambio,
+  onCargar,
+  onAgregarPeriodo,
+  onEliminar,
+  puedeEliminar,
+}) {
+  const opcion = useMemo(() => {
+    if (!datos || datos.length === 0) return null;
+
+    const sentimientos = [...new Set(datos.map((d) => d.dom))];
+    const fechas = [...new Set(datos.map((d) => d.fecha))].sort();
+    const indice = new Map();
+    sentimientos.forEach((s) => indice.set(s, []));
+
+    datos.forEach((d) => {
+      const arr = indice.get(d.dom);
+      if (arr) arr.push({ value: [d.fecha, Number(d.freq)] });
+    });
+
+    const maxFreq = Math.max(...datos.map((d) => Number(d.freq)));
+
+    return {
+      backgroundColor: 'transparent',
+      title: {
+        text: 'Sentimiento dominante por fecha',
+        left: 0,
+        top: 0,
+        textStyle: { color: '#12263f', fontFamily: 'Archivo, Public Sans, sans-serif', fontSize: 16, fontWeight: 600 },
+      },
+      tooltip: { trigger: 'axis', confine: true, axisPointer: { type: 'cross' } },
+      legend: {
+        data: sentimientos.map((s) => etiquetaSentimiento(s)),
+        textStyle: { color: '#5a7392', fontSize: 10 },
+        bottom: 0,
+      },
+      grid: { left: 60, right: 60, top: 60, bottom: 70, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: fechas,
+        name: 'Fecha',
+        nameTextStyle: { color: '#5a7392', fontSize: 11 },
+        axisLabel: { color: '#5a7392', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Frecuencia',
+        nameTextStyle: { color: '#5a7392', fontSize: 11 },
+        axisLabel: { color: '#5a7392' },
+        min: 0,
+        max: maxFreq > 0 ? maxFreq * 1.1 : 1,
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      series: sentimientos.map((s, i) => ({
+        name: etiquetaSentimiento(s),
+        type: 'bar',
+        data: indice.get(s) ?? [],
+        barMaxWidth: 24,
+        itemStyle: { color: COLORES_TIEMPO[i % COLORES_TIEMPO.length] },
+        label: { show: true, position: 'top', distance: 4, formatter: ({ value }) => value[1] ?? 0, color: '#12263f', fontSize: 8 },
+        labelLayout: { hideOverlap: true },
+      })),
+    };
+  }, [datos]);
+
+  return (
+    <section className="panel-grafico" aria-label="Sentimiento dominante por fecha" style={{ marginTop: '1.5rem' }}>
+      <div className="panel-grafico-cabecera" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+        <h2 className="panel-grafico-titulo" style={{ margin: 0, flexShrink: 0 }}>Sentimiento dominante</h2>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: '#5a7392', flexShrink: 0 }}>
+          <span>Desde</span>
+          <input
+            type="date"
+            value={fechaInicio}
+            onChange={(e) => onFechaInicioCambio(e.target.value)}
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.82rem', border: '1px solid var(--panel-borde)', borderRadius: '8px', background: '#fff' }}
+          />
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: '#5a7392', flexShrink: 0 }}>
+          <span>Hasta</span>
+          <input
+            type="date"
+            value={fechaFin}
+            onChange={(e) => onFechaFinCambio(e.target.value)}
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.82rem', border: '1px solid var(--panel-borde)', borderRadius: '8px', background: '#fff' }}
+          />
+        </label>
+
+        <button
+          type="button"
+          className="btn btn-pequeno"
+          onClick={() => onCargar(id, fechaInicio, fechaFin)}
+          disabled={cargando}
+        >
+          {cargando ? 'Cargando…' : 'Cargar'}
+        </button>
+
+        {puedeEliminar && (
+          <button
+            type="button"
+            className="btn btn-pequeno btn-eliminar"
+            onClick={() => onEliminar(id)}
+            disabled={cargando}
+          >
+            Eliminar
+          </button>
+        )}
+
+        <button
+          type="button"
+          className="btn btn-pequeno"
+          onClick={onAgregarPeriodo}
+          disabled={cargando}
+        >
+          Agregar Periodo
+        </button>
+      </div>
+
+      {error && <div className="estado-error">Error cargando datos: {error}</div>}
+
+      {cargando && <p className="placeholder">Cargando sentimiento dominante…</p>}
+
+      {!cargando && !error && opcion && (
+        <EChart option={opcion} height={420} />
+      )}
+
+      {!cargando && !error && !opcion && (
+        <p className="placeholder">Sin datos de sentimiento dominante para este rango de fechas.</p>
+      )}
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const [periodos, setPeriodos] = useState([]);
   const [periodoActivo, setPeriodoActivo] = useState('');
@@ -67,6 +380,16 @@ export default function Dashboard() {
   const [periodo, setPeriodo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  const [analisis, setAnalisis] = useState([]);
+  const [cargandoAnalisis, setCargandoAnalisis] = useState(false);
+  const [errorAnalisis, setErrorAnalisis] = useState(null);
+  const [guardando, setGuardando] = useState(null);
+  const [panelAnalisisAbierto, setPanelAnalisisAbierto] = useState(false);
+
+  // Graficos dominantes (uno por periodo/agregado)
+  const [graficosDominantes, setGraficosDominantes] = useState([{ id: 'dominante-0', fechaInicio: '', fechaFin: '' }]);
+  const [contadorDominante, setContadorDominante] = useState(1);
 
   const [comparaciones, setComparaciones] = useState([]);
   const [comparacionActiva, setComparacionActiva] = useState('');
@@ -118,6 +441,64 @@ export default function Dashboard() {
       setPeriodos([]);
     }
   }, []);
+
+  const cargarAnalisis = useCallback(async () => {
+    setCargandoAnalisis(true);
+    setErrorAnalisis(null);
+    try {
+      const resp = await apiGet('/api/dashboard/analisis');
+      setAnalisis(resp.analisis ?? []);
+    } catch (err) {
+      setErrorAnalisis(err.message);
+      setAnalisis([]);
+    } finally {
+      setCargandoAnalisis(false);
+    }
+  }, []);
+
+  const guardarAnalisis = async (id, body) => {
+    setGuardando(id);
+    try {
+      const resp = await apiPut(`/api/dashboard/analisis/${id}`, body);
+      const fila = resp.data;
+      if (fila) {
+        setAnalisis((prev) => prev.map((a) => (a.id_analisis === id ? fila : a)));
+      }
+    } catch (err) {
+      setErrorAnalisis(err.message);
+      await cargarAnalisis();
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const refrescarAnalisis = async (id) => {
+    setGuardando(id);
+    try {
+      const resp = await apiGet(`/api/dashboard/analisis/${id}`);
+      const fila = resp.data;
+      if (fila) {
+        setAnalisis((prev) => prev.map((a) => (a.id_analisis === id ? fila : a)));
+      }
+    } catch (err) {
+      setErrorAnalisis(err.message);
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const eliminarAnalisis = async (id) => {
+    if (!window.confirm('¿Eliminar este análisis?')) return;
+    setGuardando(id);
+    try {
+      await apiDelete(`/api/dashboard/analisis/${id}`);
+      setAnalisis((prev) => prev.filter((a) => a.id_analisis !== id));
+    } catch (err) {
+      setErrorAnalisis(err.message);
+    } finally {
+      setGuardando(null);
+    }
+  };
 
   const cargarNiveles = useCallback(async (nombre) => {
     setCargando(true);
@@ -208,6 +589,27 @@ export default function Dashboard() {
     }
   }, []);
 
+  const cargarDominante = useCallback(async (id, fechaInicio, fechaFin) => {
+    setGraficosDominantes((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, cargando: true, error: null } : g))
+    );
+    try {
+      const qs = new URLSearchParams();
+      if (fechaInicio) qs.set('fecha_inicio', fechaInicio);
+      if (fechaFin) qs.set('fecha_fin', fechaFin);
+      const ruta = `/api/dashboard/dominante${qs.toString() ? `?${qs.toString()}` : ''}`;
+      const resp = await apiGet(ruta);
+      const filas = Array.isArray(resp.datos) ? resp.datos : [];
+      setGraficosDominantes((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, datos: filas, cargando: false, error: null } : g))
+      );
+    } catch (err) {
+      setGraficosDominantes((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, cargando: false, error: err.message, datos: [] } : g))
+      );
+    }
+  }, [apiGet]);
+
   const cargarGraficos = useCallback(async (nombre) => {
     setCargandoGraficos(true);
     setErrorGraficos(null);
@@ -248,10 +650,21 @@ export default function Dashboard() {
     }
   }, []);
 
+  const agregarPeriodoDominante = useCallback(() => {
+    const nuevoId = `dominante-${contadorDominante}`;
+    setContadorDominante((prev) => prev + 1);
+    setGraficosDominantes((prev) => [...prev, { id: nuevoId, fechaInicio: '', fechaFin: '' }]);
+  }, [contadorDominante]);
+
+  const eliminarPeriodoDominante = useCallback((id) => {
+    setGraficosDominantes((prev) => prev.filter((g) => g.id !== id));
+  }, []);
+
   useEffect(() => {
     cargarPeriodos();
     cargarComparaciones();
-  }, [cargarPeriodos, cargarComparaciones]);
+    cargarAnalisis();
+  }, [cargarPeriodos, cargarComparaciones, cargarAnalisis]);
 
   useEffect(() => {
     cargarNiveles(periodoActivo);
@@ -259,6 +672,16 @@ export default function Dashboard() {
     cargarSankey(periodoActivo);
     cargarGraficos(periodoActivo);
   }, [cargarNiveles, cargarSerie, cargarSankey, cargarGraficos, periodoActivo]);
+
+  useEffect(() => {
+    if (graficosDominantes.length) {
+      cargarDominante(
+        graficosDominantes[0].id,
+        graficosDominantes[0].fechaInicio,
+        graficosDominantes[0].fechaFin
+      );
+    }
+  }, [cargarDominante]);
 
   useEffect(() => {
     cargarDetalleComp(comparacionActiva);
@@ -1521,7 +1944,7 @@ export default function Dashboard() {
   return (
     <div>
       <header className="page-head">
-        <div className="page-head-texto">
+        <div className="page-head-texto dashboard">
           <h1 className="page-title">Dashboard</h1>
           <p className="page-desc">
             Niveles de sentimiento calculados en R y guardados en Postgres.
@@ -1546,6 +1969,70 @@ export default function Dashboard() {
           </label>
         )}
       </header>
+
+      {/* Graficos de sentimiento dominante (analisis_grafico_dominante) */}
+      {graficosDominantes.map((g) => (
+        <GraficoDominanteItem
+          key={g.id}
+          id={g.id}
+          fechaInicio={g.fechaInicio}
+          fechaFin={g.fechaFin}
+          datos={g.datos}
+          cargando={g.cargando}
+          error={g.error}
+          onFechaInicioCambio={(v) =>
+            setGraficosDominantes((prev) =>
+              prev.map((x) => (x.id === g.id ? { ...x, fechaInicio: v } : x))
+            )
+          }
+          onFechaFinCambio={(v) =>
+            setGraficosDominantes((prev) =>
+              prev.map((x) => (x.id === g.id ? { ...x, fechaFin: v } : x))
+            )
+          }
+          onCargar={(id, fi, ff) => cargarDominante(id, fi, ff)}
+          onAgregarPeriodo={agregarPeriodoDominante}
+          onEliminar={eliminarPeriodoDominante}
+          puedeEliminar={graficosDominantes.length > 1}
+        />
+      ))}
+
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setPanelAnalisisAbierto((prev) => !prev)}
+        >
+          Editar los análisis
+        </button>
+      </div>
+
+      {panelAnalisisAbierto && (
+        <div className="panel-flotante" role="dialog" aria-modal="true" aria-label="Editar análisis">
+          <div className="panel-flotante-cabecera">
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#12263f' }}>Editar análisis</h2>
+            <button
+              type="button"
+              className="btn btn-pequeno"
+              onClick={() => setPanelAnalisisAbierto(false)}
+            >
+              Cerrar
+            </button>
+          </div>
+          <div style={{ margin: '0.75rem', fontSize: '0.82rem', color: '#5a7392' }}>
+            Haga doble clic sobre cualquier valor para editarlo. Se guarda automáticamente al salir de la celda.
+          </div>
+          <AnalisisList
+            analisis={analisis}
+            cargando={cargandoAnalisis}
+            error={errorAnalisis}
+            guardando={guardando}
+            onGuardar={guardarAnalisis}
+            onRefrescar={refrescarAnalisis}
+            onEliminar={eliminarAnalisis}
+          />
+        </div>
+      )}
 
       {error && <div className="estado-error">No se pudo cargar el dashboard: {error}</div>}
 

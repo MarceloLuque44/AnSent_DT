@@ -7,6 +7,7 @@ import { config } from './config.js';
 import cambiosRoutes from './routes/cambios.js';
 import diccionariosRoutes from './routes/diccionarios.js';
 import analisisRoutes from './routes/analisis.js';
+import dashboardRoutes from './routes/dashboard.js';
 import preprocesarRoutes from './routes/preprocesar.js';
 import bitacoraRoutes from './routes/bitacora.js';
 import { query } from './db/pg.js';
@@ -34,6 +35,7 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/cambios', cambiosRoutes);
 app.use('/api/diccionarios', diccionariosRoutes);
 app.use('/api/dashboard', analisisRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/preprocesar', preprocesarRoutes);
 app.use('/api/bitacora', bitacoraRoutes);
 
