@@ -210,6 +210,134 @@ router.get('/periodos', async (_req, res, next) => {
   }
 });
 
+/** GET /api/dashboard/analisis — listado de todos los análisis guardados. */
+router.get('/analisis', async (_req, res, next) => {
+  try {
+    const r = await query(
+      `SELECT id_analisis, nombre, fecha_inicio, fecha_fin, n_mensajes, responsable, creado_en
+       FROM public.analisis
+       ORDER BY creado_en DESC, id_analisis DESC`
+    );
+    res.json({ ok: true, analisis: r.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/dashboard/analisis/:id_analisis — edición inline de un campo. */
+router.put('/analisis/:id_analisis', requireApiKey, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id_analisis, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id_analisis inválido' });
+    }
+
+    const body = req.body ?? {};
+    const editables = ['nombre', 'fecha_inicio', 'fecha_fin', 'n_mensajes', 'responsable'];
+    const sets = [];
+    const values = [];
+    let i = 1;
+
+    for (const campo of editables) {
+      if (!(campo in body)) continue;
+      const valor = body[campo];
+
+      if (campo === 'nombre') {
+        if (typeof valor !== 'string' || !valor.trim()) {
+          return res.status(400).json({ error: 'nombre no puede estar vacío' });
+        }
+        sets.push(`nombre = $${i++}`);
+        values.push(valor.trim());
+      } else if (campo === 'fecha_inicio' || campo === 'fecha_fin') {
+        if (valor != null && valor !== '' && !esFecha(String(valor))) {
+          return res.status(400).json({ error: `${campo} debe tener formato YYYY-MM-DD` });
+        }
+        sets.push(`${campo} = $${i++}::date`);
+        values.push(valor === '' ? null : valor);
+      } else if (campo === 'n_mensajes') {
+        const n = aNumero(valor);
+        if (n === null || !Number.isInteger(n) || n < 0) {
+          return res.status(400).json({ error: 'n_mensajes debe ser un entero >= 0' });
+        }
+        sets.push(`n_mensajes = $${i++}`);
+        values.push(n);
+      } else if (campo === 'responsable') {
+        if (valor != null && typeof valor !== 'string') {
+          return res.status(400).json({ error: 'responsable debe ser un string' });
+        }
+        sets.push(`responsable = $${i++}`);
+        values.push(valor == null ? '' : String(valor));
+      }
+    }
+
+    if (sets.length === 0) {
+      return res.status(400).json({ error: 'No hay campos editables para actualizar' });
+    }
+
+    values.push(id);
+    const r = await query(
+      `UPDATE public.analisis SET ${sets.join(', ')} WHERE id_analisis = $${i} RETURNING *`,
+      values
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Analisis no encontrado' });
+    }
+
+    res.json({ ok: true, data: r.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/dashboard/analisis/:id_analisis — obtener un análisis por id. */
+router.get('/analisis/:id_analisis', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id_analisis, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id_analisis inválido' });
+    }
+
+    const r = await query(
+      `SELECT id_analisis, nombre, fecha_inicio, fecha_fin, n_mensajes, responsable, creado_en
+       FROM public.analisis
+       WHERE id_analisis = $1`,
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Analisis no encontrado' });
+    }
+
+    res.json({ ok: true, data: r.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/dashboard/analisis/:id_analisis — eliminar un análisis. */
+router.delete('/analisis/:id_analisis', requireApiKey, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id_analisis, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id_analisis inválido' });
+    }
+
+    const r = await query(
+      `DELETE FROM public.analisis WHERE id_analisis = $1 RETURNING id_analisis`,
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Analisis no encontrado' });
+    }
+
+    res.json({ ok: true, id_analisis: id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /**
  * POST /api/dashboard/comparaciones
  * R envía cmp$niveles (dos periodos). Guarda ambos periodos en analisis /

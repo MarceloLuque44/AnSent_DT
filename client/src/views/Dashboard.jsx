@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiGet } from '../api.js';
+import { apiGet, apiPut, apiDelete } from '../api.js';
 import EChart from '../components/EChart.jsx';
 
 const AZUL_BARRAS = '#2E75B6';
@@ -60,6 +60,170 @@ const opcionBase = (titulo, subtext) => ({
  *  - Comparación A vs B:    GET /api/dashboard/comparaciones/:id
  * Todos los gráficos se dibujan con ECharts.
  */
+/** Panel desplegable (accordion), patrón igual al de Bitacoras.jsx. */
+function PanelAnalisis({ titulo, abierto, alternar, children }) {
+  return (
+    <section className="analisis-panel" aria-label="analisis">
+      <div
+        className="analisis-cabecera"
+        onClick={alternar}
+        onKeyDown={(e) => e.key === 'Enter' && alternar()}
+        role="button"
+        tabIndex={0}
+        aria-expanded={abierto}
+        aria-controls="analisis-grid"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+          <h2 className="panel-titulo">{titulo}</h2>
+        </div>
+        <span className="panel-indicador">{abierto ? '▼' : '▶'}</span>
+      </div>
+      {abierto && children}
+    </section>
+  );
+}
+
+/** Valor de un campo renderizado siempre como input (tamaño reducido). */
+function CampoInput({ campo, valor, leerSolo, nombre }) {
+  const type = campo === 'n_mensajes' ? 'number' : campo === 'fecha_inicio' || campo === 'fecha_fin' ? 'date' : 'text';
+  return (
+    <div className="analisis-campo" key={campo}>
+      <span className="analisis-label">{nombre}</span>
+      <input
+        type={type}
+        name={campo}
+        defaultValue={valor == null ? '' : String(valor)}
+        readOnly={leerSolo}
+        className="input input-pequeno"
+        key={String(valor)}
+      />
+    </div>
+  );
+}
+
+/**
+ * AnalisisList: matriz de cards con los análisis guardados en public.analisis.
+ * Cada card es un formulario con inputs para los campos editables y un botón
+ * de guardado que envía los cambios de esa card mediante PUT.
+ */
+function AnalisisList({ analisis, cargando, error, guardando, onGuardar, onRefrescar, onEliminar }) {
+  if (cargando) return <p className="placeholder">Cargando análisis…</p>;
+  if (error) return <div className="estado-error">{error}</div>;
+
+  const CAMPOS = [
+    { clave: 'id_analisis', etiqueta: 'ID', leerSolo: true },
+    { clave: 'nombre', etiqueta: 'Nombre' },
+    { clave: 'fecha_inicio', etiqueta: 'Inicio' },
+    { clave: 'fecha_fin', etiqueta: 'Fin' },
+    { clave: 'n_mensajes', etiqueta: 'Mensajes' },
+    { clave: 'responsable', etiqueta: 'Responsable' },
+    { clave: 'creado_en', etiqueta: 'Creado', leerSolo: true },
+  ];
+
+  if (analisis.length === 0) {
+    return (
+      <div className="analisis-vacio">
+        <p className="placeholder">No hay análisis guardados todavía.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="analisis-grid">
+      {analisis.map((a) => {
+        const estaGuardando = guardando === a.id_analisis;
+        return (
+          <form
+            key={a.id_analisis}
+            className="analisis-card"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const body = {};
+              let invalido = null;
+
+              for (const { clave, leerSolo, etiqueta } of CAMPOS) {
+                if (leerSolo) continue;
+                let v = formData.get(clave);
+                if (v === null || v === undefined) v = '';
+                v = String(v).trim();
+
+                if (clave === 'nombre') {
+                  if (!v) { invalido = 'El nombre no puede estar vacío'; break; }
+                  body.nombre = v;
+                } else if (clave === 'fecha_inicio' || clave === 'fecha_fin') {
+                  if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                    invalido = `${etiqueta} debe tener formato YYYY-MM-DD`;
+                    break;
+                  }
+                  if (v) body[clave] = v;
+                } else if (clave === 'n_mensajes') {
+                  if (v !== '') {
+                    const n = Number(v);
+                    if (!Number.isInteger(n) || n < 0) {
+                      invalido = 'Mensajes debe ser un entero >= 0';
+                      break;
+                    }
+                    body.n_mensajes = n;
+                  }
+                } else if (clave === 'responsable') {
+                  if (v !== '') body.responsable = v;
+                }
+              }
+
+              if (invalido) {
+                setErrorAnalisis(invalido);
+                return;
+              }
+
+              onGuardar(a.id_analisis, body);
+            }}
+          >
+            <div className="analisis-card-cabecera">
+              <span className="analisis-id">#{a.id_analisis}</span>
+              <span style={{ fontSize: '0.72rem', color: '#5a7392', marginLeft: 'auto' }}>{a.creado_en}</span>
+            </div>
+            {CAMPOS.map((c) => (
+              <CampoInput
+                key={c.clave}
+                campo={c.clave}
+                valor={a[c.clave]}
+                leerSolo={c.leerSolo}
+                nombre={c.etiqueta}
+              />
+            ))}
+            <div className="analisis-acciones">
+              <button
+                type="submit"
+                className="btn btn-pequeno"
+                disabled={estaGuardando}
+              >
+                {estaGuardando ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-pequeno btn-refrescar"
+                onClick={() => onRefrescar(a.id_analisis)}
+                disabled={estaGuardando}
+              >
+                Refrescar
+              </button>
+              <button
+                type="button"
+                className="btn btn-pequeno btn-eliminar"
+                onClick={() => onEliminar(a.id_analisis)}
+                disabled={estaGuardando}
+              >
+                Eliminar
+              </button>
+            </div>
+          </form>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [periodos, setPeriodos] = useState([]);
   const [periodoActivo, setPeriodoActivo] = useState('');
@@ -67,6 +231,12 @@ export default function Dashboard() {
   const [periodo, setPeriodo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  const [analisis, setAnalisis] = useState([]);
+  const [cargandoAnalisis, setCargandoAnalisis] = useState(false);
+  const [errorAnalisis, setErrorAnalisis] = useState(null);
+  const [guardando, setGuardando] = useState(null);
+  const [analisisAbierto, setAnalisisAbierto] = useState(true);
 
   const [comparaciones, setComparaciones] = useState([]);
   const [comparacionActiva, setComparacionActiva] = useState('');
@@ -118,6 +288,64 @@ export default function Dashboard() {
       setPeriodos([]);
     }
   }, []);
+
+  const cargarAnalisis = useCallback(async () => {
+    setCargandoAnalisis(true);
+    setErrorAnalisis(null);
+    try {
+      const resp = await apiGet('/api/dashboard/analisis');
+      setAnalisis(resp.analisis ?? []);
+    } catch (err) {
+      setErrorAnalisis(err.message);
+      setAnalisis([]);
+    } finally {
+      setCargandoAnalisis(false);
+    }
+  }, []);
+
+  const guardarAnalisis = async (id, body) => {
+    setGuardando(id);
+    try {
+      const resp = await apiPut(`/api/dashboard/analisis/${id}`, body);
+      const fila = resp.data;
+      if (fila) {
+        setAnalisis((prev) => prev.map((a) => (a.id_analisis === id ? fila : a)));
+      }
+    } catch (err) {
+      setErrorAnalisis(err.message);
+      await cargarAnalisis();
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const refrescarAnalisis = async (id) => {
+    setGuardando(id);
+    try {
+      const resp = await apiGet(`/api/dashboard/analisis/${id}`);
+      const fila = resp.data;
+      if (fila) {
+        setAnalisis((prev) => prev.map((a) => (a.id_analisis === id ? fila : a)));
+      }
+    } catch (err) {
+      setErrorAnalisis(err.message);
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const eliminarAnalisis = async (id) => {
+    if (!window.confirm('¿Eliminar este análisis?')) return;
+    setGuardando(id);
+    try {
+      await apiDelete(`/api/dashboard/analisis/${id}`);
+      setAnalisis((prev) => prev.filter((a) => a.id_analisis !== id));
+    } catch (err) {
+      setErrorAnalisis(err.message);
+    } finally {
+      setGuardando(null);
+    }
+  };
 
   const cargarNiveles = useCallback(async (nombre) => {
     setCargando(true);
@@ -251,7 +479,8 @@ export default function Dashboard() {
   useEffect(() => {
     cargarPeriodos();
     cargarComparaciones();
-  }, [cargarPeriodos, cargarComparaciones]);
+    cargarAnalisis();
+  }, [cargarPeriodos, cargarComparaciones, cargarAnalisis]);
 
   useEffect(() => {
     cargarNiveles(periodoActivo);
@@ -1521,7 +1750,7 @@ export default function Dashboard() {
   return (
     <div>
       <header className="page-head">
-        <div className="page-head-texto">
+        <div className="page-head-texto dashboard">
           <h1 className="page-title">Dashboard</h1>
           <p className="page-desc">
             Niveles de sentimiento calculados en R y guardados en Postgres.
@@ -1546,6 +1775,25 @@ export default function Dashboard() {
           </label>
         )}
       </header>
+
+      <PanelAnalisis
+        titulo="Analisis guardados"
+        abierto={analisisAbierto}
+        alternar={() => setAnalisisAbierto((prev) => !prev)}
+      >
+        <div style={{ marginBottom: '0.75rem', fontSize: '0.82rem', color: '#5a7392' }}>
+          Haga doble clic sobre cualquier valor para editarlo. Se guarda automáticamente al salir de la celda.
+        </div>
+        <AnalisisList
+          analisis={analisis}
+          cargando={cargandoAnalisis}
+          error={errorAnalisis}
+          guardando={guardando}
+          onGuardar={guardarAnalisis}
+          onRefrescar={refrescarAnalisis}
+          onEliminar={eliminarAnalisis}
+        />
+      </PanelAnalisis>
 
       {error && <div className="estado-error">No se pudo cargar el dashboard: {error}</div>}
 
