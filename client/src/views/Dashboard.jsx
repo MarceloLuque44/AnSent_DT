@@ -224,6 +224,155 @@ function AnalisisList({ analisis, cargando, error, guardando, onGuardar, onRefre
   );
 }
 
+/**
+ * GraficoDominanteItem: grafico de analisis_grafico_dominante.
+ * Eje x = fecha, eje y = freq, cada sentimiento (dom) es una serie.
+ * Incluye filtros de fecha inicio/fin y boton para agregar otro periodo.
+ */
+function GraficoDominanteItem({
+  id,
+  fechaInicio,
+  fechaFin,
+  datos,
+  cargando,
+  error,
+  onFechaInicioCambio,
+  onFechaFinCambio,
+  onCargar,
+  onAgregarPeriodo,
+  onEliminar,
+  puedeEliminar,
+}) {
+  const opcion = useMemo(() => {
+    if (!datos || datos.length === 0) return null;
+
+    const sentimientos = [...new Set(datos.map((d) => d.dom))];
+    const fechas = [...new Set(datos.map((d) => d.fecha))].sort();
+    const indice = new Map();
+    sentimientos.forEach((s) => indice.set(s, []));
+
+    datos.forEach((d) => {
+      const arr = indice.get(d.dom);
+      if (arr) arr.push({ value: [d.fecha, Number(d.freq)] });
+    });
+
+    const maxFreq = Math.max(...datos.map((d) => Number(d.freq)));
+
+    return {
+      backgroundColor: 'transparent',
+      title: {
+        text: 'Sentimiento dominante por fecha',
+        left: 0,
+        top: 0,
+        textStyle: { color: '#12263f', fontFamily: 'Archivo, Public Sans, sans-serif', fontSize: 16, fontWeight: 600 },
+      },
+      tooltip: { trigger: 'axis', confine: true, axisPointer: { type: 'cross' } },
+      legend: {
+        data: sentimientos.map((s) => etiquetaSentimiento(s)),
+        textStyle: { color: '#5a7392', fontSize: 10 },
+        bottom: 0,
+      },
+      grid: { left: 60, right: 60, top: 60, bottom: 70, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: fechas,
+        name: 'Fecha',
+        nameTextStyle: { color: '#5a7392', fontSize: 11 },
+        axisLabel: { color: '#5a7392', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#d8e6f7' } },
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Frecuencia',
+        nameTextStyle: { color: '#5a7392', fontSize: 11 },
+        axisLabel: { color: '#5a7392' },
+        min: 0,
+        max: maxFreq > 0 ? maxFreq * 1.1 : 1,
+        splitLine: { lineStyle: { color: '#e7f0fb' } },
+      },
+      series: sentimientos.map((s, i) => ({
+        name: etiquetaSentimiento(s),
+        type: 'bar',
+        data: indice.get(s) ?? [],
+        barMaxWidth: 24,
+        itemStyle: { color: COLORES_TIEMPO[i % COLORES_TIEMPO.length] },
+        label: { show: true, position: 'top', distance: 4, formatter: ({ value }) => value[1] ?? 0, color: '#12263f', fontSize: 8 },
+        labelLayout: { hideOverlap: true },
+      })),
+    };
+  }, [datos]);
+
+  return (
+    <section className="panel-grafico" aria-label="Sentimiento dominante por fecha" style={{ marginTop: '1.5rem' }}>
+      <div className="panel-grafico-cabecera" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+        <h2 className="panel-grafico-titulo" style={{ margin: 0, flexShrink: 0 }}>Sentimiento dominante</h2>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: '#5a7392', flexShrink: 0 }}>
+          <span>Desde</span>
+          <input
+            type="date"
+            value={fechaInicio}
+            onChange={(e) => onFechaInicioCambio(e.target.value)}
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.82rem', border: '1px solid var(--panel-borde)', borderRadius: '8px', background: '#fff' }}
+          />
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: '#5a7392', flexShrink: 0 }}>
+          <span>Hasta</span>
+          <input
+            type="date"
+            value={fechaFin}
+            onChange={(e) => onFechaFinCambio(e.target.value)}
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.82rem', border: '1px solid var(--panel-borde)', borderRadius: '8px', background: '#fff' }}
+          />
+        </label>
+
+        <button
+          type="button"
+          className="btn btn-pequeno"
+          onClick={() => onCargar(id, fechaInicio, fechaFin)}
+          disabled={cargando}
+        >
+          {cargando ? 'Cargando…' : 'Cargar'}
+        </button>
+
+        {puedeEliminar && (
+          <button
+            type="button"
+            className="btn btn-pequeno btn-eliminar"
+            onClick={() => onEliminar(id)}
+            disabled={cargando}
+          >
+            Eliminar
+          </button>
+        )}
+
+        <button
+          type="button"
+          className="btn btn-pequeno"
+          onClick={onAgregarPeriodo}
+          disabled={cargando}
+        >
+          Agregar Periodo
+        </button>
+      </div>
+
+      {error && <div className="estado-error">Error cargando datos: {error}</div>}
+
+      {cargando && <p className="placeholder">Cargando sentimiento dominante…</p>}
+
+      {!cargando && !error && opcion && (
+        <EChart option={opcion} height={420} />
+      )}
+
+      {!cargando && !error && !opcion && (
+        <p className="placeholder">Sin datos de sentimiento dominante para este rango de fechas.</p>
+      )}
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const [periodos, setPeriodos] = useState([]);
   const [periodoActivo, setPeriodoActivo] = useState('');
@@ -237,6 +386,10 @@ export default function Dashboard() {
   const [errorAnalisis, setErrorAnalisis] = useState(null);
   const [guardando, setGuardando] = useState(null);
   const [panelAnalisisAbierto, setPanelAnalisisAbierto] = useState(false);
+
+  // Graficos dominantes (uno por periodo/agregado)
+  const [graficosDominantes, setGraficosDominantes] = useState([{ id: 'dominante-0', fechaInicio: '', fechaFin: '' }]);
+  const [contadorDominante, setContadorDominante] = useState(1);
 
   const [comparaciones, setComparaciones] = useState([]);
   const [comparacionActiva, setComparacionActiva] = useState('');
@@ -436,6 +589,27 @@ export default function Dashboard() {
     }
   }, []);
 
+  const cargarDominante = useCallback(async (id, fechaInicio, fechaFin) => {
+    setGraficosDominantes((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, cargando: true, error: null } : g))
+    );
+    try {
+      const qs = new URLSearchParams();
+      if (fechaInicio) qs.set('fecha_inicio', fechaInicio);
+      if (fechaFin) qs.set('fecha_fin', fechaFin);
+      const ruta = `/api/dashboard/dominante${qs.toString() ? `?${qs.toString()}` : ''}`;
+      const resp = await apiGet(ruta);
+      const filas = Array.isArray(resp.datos) ? resp.datos : [];
+      setGraficosDominantes((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, datos: filas, cargando: false, error: null } : g))
+      );
+    } catch (err) {
+      setGraficosDominantes((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, cargando: false, error: err.message, datos: [] } : g))
+      );
+    }
+  }, [apiGet]);
+
   const cargarGraficos = useCallback(async (nombre) => {
     setCargandoGraficos(true);
     setErrorGraficos(null);
@@ -476,6 +650,16 @@ export default function Dashboard() {
     }
   }, []);
 
+  const agregarPeriodoDominante = useCallback(() => {
+    const nuevoId = `dominante-${contadorDominante}`;
+    setContadorDominante((prev) => prev + 1);
+    setGraficosDominantes((prev) => [...prev, { id: nuevoId, fechaInicio: '', fechaFin: '' }]);
+  }, [contadorDominante]);
+
+  const eliminarPeriodoDominante = useCallback((id) => {
+    setGraficosDominantes((prev) => prev.filter((g) => g.id !== id));
+  }, []);
+
   useEffect(() => {
     cargarPeriodos();
     cargarComparaciones();
@@ -488,6 +672,16 @@ export default function Dashboard() {
     cargarSankey(periodoActivo);
     cargarGraficos(periodoActivo);
   }, [cargarNiveles, cargarSerie, cargarSankey, cargarGraficos, periodoActivo]);
+
+  useEffect(() => {
+    if (graficosDominantes.length) {
+      cargarDominante(
+        graficosDominantes[0].id,
+        graficosDominantes[0].fechaInicio,
+        graficosDominantes[0].fechaFin
+      );
+    }
+  }, [cargarDominante]);
 
   useEffect(() => {
     cargarDetalleComp(comparacionActiva);
@@ -1775,6 +1969,33 @@ export default function Dashboard() {
           </label>
         )}
       </header>
+
+      {/* Graficos de sentimiento dominante (analisis_grafico_dominante) */}
+      {graficosDominantes.map((g) => (
+        <GraficoDominanteItem
+          key={g.id}
+          id={g.id}
+          fechaInicio={g.fechaInicio}
+          fechaFin={g.fechaFin}
+          datos={g.datos}
+          cargando={g.cargando}
+          error={g.error}
+          onFechaInicioCambio={(v) =>
+            setGraficosDominantes((prev) =>
+              prev.map((x) => (x.id === g.id ? { ...x, fechaInicio: v } : x))
+            )
+          }
+          onFechaFinCambio={(v) =>
+            setGraficosDominantes((prev) =>
+              prev.map((x) => (x.id === g.id ? { ...x, fechaFin: v } : x))
+            )
+          }
+          onCargar={(id, fi, ff) => cargarDominante(id, fi, ff)}
+          onAgregarPeriodo={agregarPeriodoDominante}
+          onEliminar={eliminarPeriodoDominante}
+          puedeEliminar={graficosDominantes.length > 1}
+        />
+      ))}
 
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
         <button
