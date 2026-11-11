@@ -396,47 +396,6 @@ enviar_graficos_adicionales_api <- function(a, responsable = Sys.getenv("RESPONS
   })
 }
 
-enviar_comparacion_api <- function(cmp, responsable = Sys.getenv("RESPONSABLE", "R local")) {
-  if (!inherits(cmp, "comparacion_periodos")) {
-    stop("'cmp' debe ser la salida de comparar_periodos().", call. = FALSE)
-  }
-
-  claves    <- names(cmp$periodos)
-  etiquetas <- vapply(cmp$periodos, function(p) p$nombre, character(1))
-
-  niveles <- cmp$niveles
-  niveles$periodo <- etiquetas[match(niveles$periodo, claves)]
-
-  periodos <- lapply(seq_along(cmp$periodos), function(i) {
-    p <- cmp$periodos[[i]]
-    n <- unique(niveles$n_mensajes[niveles$periodo == etiquetas[i]])
-    list(
-      clave      = claves[i],
-      nombre     = p$nombre,
-      inicio     = as.character(p$inicio),
-      fin        = as.character(p$fin),
-      n_mensajes = if (length(n)) n[1] else NA
-    )
-  })
-
-  body <- list(
-    nombre      = paste(etiquetas[1], "vs", etiquetas[2]),
-    responsable = responsable,
-    periodos    = periodos,
-    datos       = niveles[, c("sentimiento", "periodo", "nivel_pct",
-                              "mensajes_pct", "n_mensajes"), drop = FALSE]
-  )
-
-  req <- httr2::request(paste0(api_url(), "/api/dashboard/comparaciones")) |>
-    httr2::req_headers(`x-api-key` = api_key()) |>
-    httr2::req_body_json(body, auto_unbox = TRUE) |>
-    httr2::req_method("POST") |>
-    httr2::req_timeout(60)
-
-  resp <- api_perform(req)
-  httr2::resp_body_json(resp, simplifyVector = TRUE)
-}
-
 # --- 2. Endpoint /api/diccionarios/* (migración de diccionarios) --------------
 
 # POST /api/diccionarios/:tipo  (requiere x-api-key)
@@ -600,13 +559,6 @@ enviar_flujo_completo_api <- function(a = NULL, cmp = NULL,
     })
   }
 
-  if (!is.null(cmp) && inherits(cmp, "comparacion_periodos")) {
-    tryCatch({
-      resultados$comparacion <- enviar_comparacion_api(cmp, responsable = responsable)
-    }, error = function(e) {
-      message("Comparacion: ", conditionMessage(e))
-    })
-  }
 
   if (isTRUE(enviar_bitacora)) {
     tryCatch({

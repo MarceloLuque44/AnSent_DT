@@ -1050,7 +1050,7 @@ export default function Bitacoras() {
 
       {!detalleId && (
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          {['bitacora', 'cambios', 'ejecuciones'].map((t) => (
+          {['bitacora'  , 'ejecuciones'].map((t) => (
             <button
               key={t}
               type="button"
