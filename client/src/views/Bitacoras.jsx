@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api.js';
 import TablaCambios from '../components/TablaCambios.jsx';
 import EChart from '../components/EChart.jsx';
+import FlujoProceso from '../components/FlujoProceso.jsx';
 
 const PAGE_SIZE = 10;
 
@@ -1050,7 +1051,7 @@ export default function Bitacoras() {
 
       {!detalleId && (
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          {['bitacora'  , 'ejecuciones'].map((t) => (
+          {['bitacora', 'flujo', 'ejecuciones'].map((t) => (
             <button
               key={t}
               type="button"
@@ -1069,9 +1070,11 @@ export default function Bitacoras() {
             >
               {t === 'bitacora'
                 ? 'Bitacora de preprocesamiento'
-                : t === 'cambios'
-                  ? 'Cambios de código/diccionarios'
-                  : 'Ejecuciones de preprocesar'}
+                : t === 'flujo'
+                  ? 'Flujo del proceso'
+                  : t === 'cambios'
+                    ? 'Cambios de código/diccionarios'
+                    : 'Ejecuciones de preprocesar'}
             </button>
           ))}
         </div>
@@ -1080,6 +1083,8 @@ export default function Bitacoras() {
       {detalleId && renderDetalle()}
 
       {!detalleId && tab === 'bitacora' && renderBitacora()}
+
+      {!detalleId && tab === 'flujo' && <FlujoProceso />}
 
       {!detalleId && tab === 'cambios' && renderCambios()}
 

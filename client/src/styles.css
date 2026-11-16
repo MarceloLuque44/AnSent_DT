@@ -2709,3 +2709,420 @@ select:focus {
   }
 }
 
+
+/* ============================================================
+   BITACORA: diagrama de flujo del preprocesamiento
+   ============================================================ */
+.flujo {
+  margin-top: 1.2rem;
+}
+
+.flujo-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--radio);
+  background: var(--degradado-azul);
+  color: #ffffff;
+  box-shadow: var(--sombra-2);
+}
+
+.flujo-hero-etiqueta {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.flujo-hero-numero {
+  margin: 0.1rem 0 0;
+  font-family: 'Archivo', 'Public Sans', sans-serif;
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.flujo-hero-rango {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.flujo-hero-resumen {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.flujo-hero-resumen > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.flujo-hero-dato {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.flujo-hero-pie {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.flujo-hero-mas {
+  font-size: 1.2rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.flujo-lista {
+  list-style: none;
+  margin: 1.4rem 0 0;
+  padding: 0;
+}
+
+.flujo-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+
+/* Conector vertical entre nodos */
+.flujo-item::before {
+  content: '';
+  position: absolute;
+  left: 25px;
+  top: 46px;
+  bottom: -2px;
+  width: 2px;
+  background: linear-gradient(180deg, var(--azul-medio), var(--panel-borde));
+}
+
+.flujo-item:last-child::before {
+  display: none;
+}
+
+.flujo-nodo {
+  position: relative;
+  z-index: 1;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: 'Archivo', 'Public Sans', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ffffff;
+  box-shadow: var(--sombra-2);
+  border: 3px solid var(--panel);
+}
+
+.flujo-nodo--info {
+  background: linear-gradient(145deg, #4f95f8, #1746b0);
+}
+
+.flujo-nodo--excluye {
+  background: linear-gradient(145deg, #ef7b7b, #cf3f3f);
+}
+
+.flujo-nodo--limpia {
+  background: linear-gradient(145deg, #35c7b6, #0b8d80);
+}
+
+.flujo-nodo--final {
+  background: linear-gradient(145deg, #3b82f6, #1b4fd1);
+}
+
+.flujo-tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--panel-borde);
+  border-radius: var(--radio);
+  padding: 0.85rem 1.1rem;
+  box-shadow: var(--brillo-interior), var(--sombra-1);
+}
+
+.flujo-cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.flujo-titulo {
+  margin: 0;
+  font-family: 'Archivo', 'Public Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.flujo-etapa {
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.flujo-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--panel-suave);
+  border: 1px solid var(--panel-borde);
+}
+
+.flujo-puntos {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.flujo-puntos li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.87rem;
+  color: var(--texto);
+  padding-left: 0.95rem;
+  position: relative;
+}
+
+.flujo-puntos li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--azul-medio);
+}
+
+.flujo-valor {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--azul-oscuro);
+  background: var(--azul-suave);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+}
+
+.flujo-salida {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--panel-borde);
+  font-size: 0.88rem;
+}
+
+.flujo-salida-texto {
+  color: var(--texto-suave);
+}
+
+.flujo-salida-texto strong {
+  color: var(--texto);
+  font-size: 0.95rem;
+}
+
+.flujo-perdida {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--rojo);
+  background: #fdeeee;
+  border: 1px solid #f7d3d3;
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+}
+
+.flujo-nota {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+  line-height: 1.45;
+}
+
+/* Tabla de los 11 pasos de limpieza */
+.flujo-tabla-scroll {
+  margin-top: 0.7rem;
+  box-shadow: none;
+  border-radius: 10px;
+}
+
+.flujo-tabla {
+  font-size: 0.82rem;
+}
+
+.flujo-tabla th,
+.flujo-tabla td {
+  padding: 0.35rem 0.6rem;
+}
+
+.flujo-tabla-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  white-space: nowrap;
+}
+
+/* Barra de polaridad (etapa 11) */
+.flujo-barra {
+  display: flex;
+  height: 16px;
+  margin-top: 0.7rem;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--panel-borde);
+}
+
+.flujo-barra-pos {
+  background: var(--menta);
+}
+
+.flujo-barra-neg {
+  background: var(--rojo);
+}
+
+.flujo-barra-neu {
+  background: #cddcec;
+}
+
+.flujo-leyenda {
+  display: flex;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  margin-top: 0.55rem;
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+}
+
+.flujo-leyenda span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.flujo-leyenda strong {
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.flujo-punto {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.flujo-punto--pos {
+  background: var(--menta);
+}
+
+.flujo-punto--neg {
+  background: var(--rojo);
+}
+
+.flujo-punto--neu {
+  background: #cddcec;
+}
+
+/* Balance final (etapa 13) */
+.flujo-balance {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: var(--degradado-suave);
+  border: 1px solid var(--panel-borde);
+}
+
+.flujo-balance-total {
+  font-family: 'Archivo', 'Public Sans', sans-serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--azul-oscuro);
+  font-variant-numeric: tabular-nums;
+}
+
+.flujo-balance-signo {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+}
+
+.flujo-balance-parte {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.flujo-balance-parte small {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-suave);
+}
+
+@media (max-width: 640px) {
+  .flujo-item {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 0.7rem;
+  }
+
+  .flujo-nodo {
+    width: 40px;
+    height: 40px;
+    font-size: 0.95rem;
+    border-width: 2px;
+  }
+
+  .flujo-item::before {
+    left: 19px;
+    top: 36px;
+  }
+
+  .flujo-hero-numero {
+    font-size: 2rem;
+  }
+
+  .flujo-puntos li {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+}
