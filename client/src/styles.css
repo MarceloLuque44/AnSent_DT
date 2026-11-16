@@ -2788,6 +2788,30 @@ select:focus {
   opacity: 0.75;
 }
 
+.flujo-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+}
+
+.flujo-toolbar code {
+  background: var(--azul-suave);
+  color: var(--azul-oscuro);
+  padding: 0.05rem 0.35rem;
+  border-radius: 5px;
+  font-size: 0.95em;
+}
+
+.flujo-toolbar .btn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+}
+
 .flujo-lista {
   list-style: none;
   margin: 1.4rem 0 0;
@@ -3125,4 +3149,76 @@ select:focus {
     flex-direction: column;
     gap: 0.15rem;
   }
+}
+
+/* Código R ilustrativo dentro de cada etapa */
+.flujo-codigo {
+  margin-top: 0.6rem;
+}
+
+.flujo-codigo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid var(--panel-borde);
+  border-radius: 999px;
+  background: var(--panel-suave);
+  color: var(--texto-suave);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.flujo-codigo-btn:hover {
+  background: var(--azul-suave);
+  color: var(--azul-oscuro);
+  border-color: var(--azul-medio);
+}
+
+.flujo-codigo-btn:focus-visible {
+  outline: 2px solid var(--azul-medio);
+  outline-offset: 2px;
+}
+
+.flujo-codigo-icono {
+  font-family: 'Archivo', 'Public Sans', sans-serif;
+  font-weight: 700;
+  color: var(--azul-oscuro);
+}
+
+.flujo-codigo-archivo {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--texto-suave);
+  background: var(--panel);
+  border: 1px solid var(--panel-borde-suave);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+}
+
+.flujo-pre {
+  margin: 0.5rem 0 0;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  background: #0f1c2e;
+  color: #dbe9fb;
+  border: 1px solid #1d3350;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  overflow: auto;
+  max-height: 340px;
+  tab-size: 2;
+}
+
+.flujo-pre code {
+  font-family: inherit;
+  white-space: pre;
 }

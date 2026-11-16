@@ -42,7 +42,6 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <span className="brand">Análisis de Sentimientos</span>
-        <span className="page-chip">Fase 1 · Render</span>
       </header>
 
       <div className="shell">
