@@ -25,6 +25,18 @@ const texto = (v) => (v == null || v === '' ? '—' : String(v));
 
 const esArrayJson = (c) => c === 'palabras' || c === 'raices';
 
+/** Columna que se muestra como titulo de la tarjeta (la mas significativa de cada diccionario). */
+const CAMPO_PRINCIPAL = {
+  sentimientos: 'nombre',
+  emojis: 'emoji',
+  stopwords: 'palabra',
+  palabras_anuncio: 'patron',
+  genero: 'palabra',
+  abreviaturas: 'abreviatura',
+  emoticonos: 'emoticono',
+  codigos_materia: 'prefijo',
+};
+
 /** Vista Configuracion: CRUD de diccionarios via /api/diccionarios/:tipo. */
 export default function Configuracion() {
   const [tipos, setTipos] = useState([]);
@@ -183,6 +195,30 @@ export default function Configuracion() {
 
   const filasVacias = !cargando && !error && filas.length === 0;
 
+  /** Valor de una columna dentro de la tarjeta; resalta los datos clave con chips. */
+  const renderValorDic = (columna, valor) => {
+    if (esArrayJson(columna) && Array.isArray(valor)) {
+      return <span className="tarjeta-dic-chip">[{valor.length} elementos]</span>;
+    }
+    if (columna === 'activo') {
+      return (
+        <span className={`tarjeta-dic-chip ${valor ? 'es-activo' : 'es-inactivo'}`}>
+          {valor ? 'Activo' : 'Inactivo'}
+        </span>
+      );
+    }
+    if (columna === 'polaridad' && valor != null && valor !== '') {
+      const n = Number(valor);
+      const clase = n > 0 ? 'es-pos' : n < 0 ? 'es-neg' : 'es-neu';
+      return <span className={`tarjeta-dic-chip ${clase}`}>{texto(valor)}</span>;
+    }
+    return (
+      <span className="tarjeta-dic-valor" title={texto(valor)}>
+        {texto(valor)}
+      </span>
+    );
+  };
+
   return (
     <div>
       <header className="page-head">
@@ -205,13 +241,13 @@ export default function Configuracion() {
 
       {tipoActivo && (
         <>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <label style={{ fontWeight: 600, fontSize: '0.85rem', color: '#5a7392', margin: 0 }}>Diccionario</label>
+          <div className="config-controles">
+            <label className="config-controles-label" htmlFor="selector-diccionario">Diccionario</label>
             <select
+              id="selector-diccionario"
               className="input"
               value={tipoActivo}
               onChange={(e) => setTipoActivo(e.target.value)}
-              style={{ minWidth: '220px' }}
             >
               {tipos.map((t) => {
                 const info = TIPO_POR_ID[t.tipo] ?? {};
@@ -227,7 +263,6 @@ export default function Configuracion() {
               className="btn"
               onClick={iniciarNuevo}
               disabled={cargando || guardando}
-              style={{ marginLeft: 'auto' }}
             >
               {editando ? 'Cancelar' : 'Nueva fila'}
             </button>
@@ -315,42 +350,41 @@ export default function Configuracion() {
             <>
               {filasVacias && <p className="placeholder">No hay filas para mostrar en este diccionario.</p>}
               {filas.length > 0 && (
-                <div className="tarjetas-diccionario" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                  {filas.map((f) => (
-                    <div key={f.id} style={{ border: '1px solid var(--panel-borde)', borderRadius: '8px', padding: '1rem', background: 'var(--panel)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                        <span style={{ fontWeight: 600, color: '#5a7392', fontSize: '0.85rem' }}>ID #{texto(f.id)}</span>
-                        <div style={{ display: 'flex', gap: '0.3rem' }}>
-                          <button
-                            type="button"
-                            className="btn"
-                            onClick={() => iniciarEdicion(f)}
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                          >
+                <div className="grid-diccionario">
+                  {filas.map((f) => {
+                    const principal = columnas.includes(CAMPO_PRINCIPAL[tipoActivo])
+                      ? CAMPO_PRINCIPAL[tipoActivo]
+                      : columnas[0];
+                    const resto = columnas.filter((c) => c !== principal);
+                    return (
+                      <article key={f.id} className="tarjeta-dic">
+                        <span className="tarjeta-dic-id">#{texto(f.id)}</span>
+                        <h3 className="tarjeta-dic-principal" title={texto(f[principal])}>
+                          {texto(f[principal])}
+                        </h3>
+                        <div className="tarjeta-dic-datos">
+                          {resto.map((c) => (
+                            <div key={c} className="tarjeta-dic-campo">
+                              <span className="tarjeta-dic-etiqueta">{c}</span>
+                              {renderValorDic(c, f[c])}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="tarjeta-dic-acciones">
+                          <button type="button" className="btn btn-mini" onClick={() => iniciarEdicion(f)}>
                             Editar
                           </button>
                           <button
                             type="button"
-                            className="btn"
+                            className="btn btn-mini btn-eliminar"
                             onClick={() => eliminarFila(f.id)}
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                           >
                             Eliminar
                           </button>
                         </div>
-                      </div>
-                      {columnas.map((c) => {
-                        const v = f[c];
-                        const mostrar = esArrayJson(c) && Array.isArray(v) ? `[${v.length} elementos]` : texto(v);
-                        return (
-                          <div key={c} style={{ marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: '#5a7392', display: 'block', marginBottom: '0.15rem' }}>{c}</span>
-                            <span style={{ wordBreak: 'break-all' }}>{mostrar}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </>
